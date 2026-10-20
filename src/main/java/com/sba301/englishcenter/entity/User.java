@@ -51,10 +51,6 @@ public class User extends BaseEntity {
     @Column(name = "is_active")
     private Boolean isActive = true;
 
-    @Builder.Default
-    @Column(name = "must_change_password", nullable = false)
-    private Boolean mustChangePassword = false;
-
     @ManyToOne(fetch = FetchType.EAGER)
     @JoinColumn(name = "role_id", nullable = false)
     private Role role;

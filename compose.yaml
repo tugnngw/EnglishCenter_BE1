@@ -8,11 +8,26 @@ services:
       - 'POSTGRES_USER=${DB_USERNAME}'
       - 'POSTGRES_PASSWORD=${DB_PASSWORD}'
     ports:
-      - '5432:5432'
+      - '${DB_PORT:-5432}:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - englishcenter-network
+
+  redis:
+    image: 'redis:7-alpine'
+    container_name: englishcenter-redis
+    ports:
+      - '${REDIS_PORT:-6379}:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,20 +45,26 @@ services:
     env_file:
       - .env
     environment:
-      # Trong mang docker, DB nam o service "postgres" chu khong phai localhost
+      # Trong mang docker, service name la hostname
       - 'DB_HOST=postgres'
       - 'DB_PORT=5432'
-      - 'SPRING_JPA_HIBERNATE_DDL_AUTO=update'
+      - 'REDIS_HOST=redis'
+      - 'REDIS_PORT=6379'
+      # Flyway quan ly schema -> ddl-auto=none
+      - 'SPRING_JPA_HIBERNATE_DDL_AUTO=none'
       - 'SPRING_JPA_SHOW_SQL=true'
       - 'SERVER_PORT=8080'
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     networks:
       - englishcenter-network
 
 volumes:
   postgres_data:
+  redis_data:
 
 networks:
   englishcenter-network:

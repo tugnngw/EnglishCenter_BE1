@@ -81,7 +81,6 @@ public class MentorServiceImpl implements MentorService {
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
                 .isActive(true)
-                .mustChangePassword(true)  // Must change password on first login
                 .role(mentorRole)
                 .failedLoginAttempts(0)
                 .build();
@@ -112,7 +111,7 @@ public class MentorServiceImpl implements MentorService {
 
         mentorProfileRepository.save(profile);
 
-        log.info("Mentor created: email={}, mustChangePassword=true", mentor.getEmail());
+        log.info("Mentor created: email={}", mentor.getEmail());
 
         return CreateMentorResponse.builder()
                 .mentor(toMentorResponse(mentor, profile))

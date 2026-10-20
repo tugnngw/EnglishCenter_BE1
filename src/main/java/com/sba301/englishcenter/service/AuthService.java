@@ -23,7 +23,7 @@ public interface AuthService {
     /**
      * Change user password.
      * Validates current password, ensures new password is different.
-     * Clears mustChangePassword flag and revokes all refresh tokens.
+     * Revokes all refresh tokens to force re-login on other devices.
      *
      * @param userId Current user's ID
      * @param request Password change request

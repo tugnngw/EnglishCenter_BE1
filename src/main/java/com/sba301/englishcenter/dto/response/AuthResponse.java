@@ -21,5 +21,4 @@ public class AuthResponse {
 
     private long expiresIn;
     private UserResponse user;
-    private Boolean mustChangePassword;
 }

@@ -130,7 +130,6 @@ public class AuthServiceImpl implements AuthService {
                 .refreshToken(refreshToken)
                 .expiresIn(tokenProvider.getAccessTokenExpiry() / 1000)
                 .user(toUserResponse(user))
-                .mustChangePassword(Boolean.TRUE.equals(user.getMustChangePassword()))
                 .build();
     }
 
@@ -285,9 +284,8 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.NEW_PASSWORD_SAME_AS_OLD);
         }
 
-        // Update password and clear mustChangePassword flag
+        // Update password
         user.setPassword(passwordEncoder.encode(request.getNewPassword()));
-        user.setMustChangePassword(false);
         user.setLastUpdated(LocalDateTime.now());
         userRepository.save(user);
 

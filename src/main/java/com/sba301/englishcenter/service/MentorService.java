@@ -18,7 +18,7 @@ public interface MentorService {
 
     /**
      * Create a new mentor account.
-     * Generates temporary password and sets mustChangePassword flag.
+     * Generates temporary password for mentor.
      * Does NOT send email - returns temp password in response.
      *
      * @param request Mentor creation request
