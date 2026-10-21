@@ -32,8 +32,9 @@ public class SessionVariableHelper {
             return;
         }
 
-        String sql = String.format("SET LOCAL app.current_user_id = '%s'", userId.toString());
-        entityManager.createNativeQuery(sql).executeUpdate();
+        entityManager.createNativeQuery("SELECT set_config('app.current_user_id', :userId, true)")
+                .setParameter("userId", userId.toString())
+                .getSingleResult();
         log.debug("Set session variable app.current_user_id = {}", userId);
     }
 }

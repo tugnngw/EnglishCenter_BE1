@@ -3,7 +3,6 @@ package com.sba301.englishcenter.service.impl;
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.dto.request.AssignRoleRequest;
 import com.sba301.englishcenter.dto.response.UserResponse;
-import com.sba301.englishcenter.entity.MentorProfile;
 import com.sba301.englishcenter.entity.Role;
 import com.sba301.englishcenter.entity.StudentProfile;
 import com.sba301.englishcenter.entity.User;
@@ -92,6 +91,10 @@ public class UserServiceImpl implements UserService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
+        if ("MENTOR".equalsIgnoreCase(request.getRoleName())) {
+            throw new AppException(ErrorCode.USE_CREATE_MENTOR_ENDPOINT);
+        }
+
         Role newRole = roleRepository.findByRoleName(request.getRoleName())
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
 
@@ -154,18 +157,9 @@ public class UserServiceImpl implements UserService {
 
         // Create new profile
         switch (newRole) {
-            case "MENTOR" -> {
-                MentorProfile mentorProfile = MentorProfile.builder()
-                        .userId(userId)
-                        .user(user)
-                        .mentorCreatedBy(SecurityUtils.getCurrentUserId().orElse(null))
-                        .mentorRegisteredAt(LocalDateTime.now())
-                        .build();
-                mentorProfileRepository.save(mentorProfile);
-            }
+            case "MENTOR" -> throw new AppException(ErrorCode.USE_CREATE_MENTOR_ENDPOINT);
             case "STUDENT" -> {
                 StudentProfile studentProfile = StudentProfile.builder()
-                        .userId(userId)
                         .user(user)
                         .build();
                 studentProfileRepository.save(studentProfile);

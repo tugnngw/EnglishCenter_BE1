@@ -79,6 +79,8 @@ CREATE TABLE mentor_profiles (
                                  mentor_created_by UUID,
                                  biography TEXT,
                                  specialization VARCHAR(255),
+                                 department VARCHAR(255),
+                                 avatar_url VARCHAR(500),
                                  hourly_rate NUMERIC(12,2),
                                  rating_average NUMERIC(3,2) DEFAULT 0.00,
                                  mentor_registered_at TIMESTAMP,
@@ -880,12 +882,11 @@ FROM payment_transactions pt
          JOIN users u ON pt.student_id = u.user_id
 WHERE pt.transaction_status = 'success';
 
--- View tổng hợp user + profile (tiện query)
+-- View tổng hợp user + profile (tiện query) - password excluded for security
 CREATE OR REPLACE VIEW v_users_full AS
 SELECT
     u.user_id,
     u.email,
-    u.password,
     u.full_name,
     u.phone,
     u.is_active,
@@ -900,6 +901,8 @@ SELECT
     mp.mentor_created_by,
     mp.biography,
     mp.specialization,
+    mp.department,
+    mp.avatar_url,
     mp.hourly_rate,
     mp.rating_average,
     mp.mentor_registered_at
@@ -943,7 +946,10 @@ INSERT INTO users (
 
 COMMENT ON TABLE users IS 'Users - identity only (all roles)';
 COMMENT ON TABLE student_profiles IS 'Student-specific profile fields';
-COMMENT ON TABLE mentor_profiles IS 'Mentor-specific profile fields';
+COMMENT ON TABLE mentor_profiles IS 'Mentor-specific profile fields (includes department and avatar)';
+COMMENT ON COLUMN mentor_profiles.department IS 'Department or faculty that the mentor belongs to';
+COMMENT ON COLUMN mentor_profiles.avatar_url IS 'URL to mentor profile avatar image';
+COMMENT ON VIEW v_users_full IS 'User information view - password excluded for security';
 COMMENT ON TABLE roles IS 'System roles (ADMIN, MENTOR, STUDENT) - UPPERCASE';
 COMMENT ON TABLE auth_tokens IS 'Refresh tokens + revoked access tokens';
 COMMENT ON TABLE certificates IS 'Language certificates (TOEIC, IELTS, ...)';

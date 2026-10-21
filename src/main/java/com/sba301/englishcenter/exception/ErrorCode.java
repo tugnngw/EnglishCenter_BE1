@@ -41,6 +41,7 @@ public enum ErrorCode {
     MENTOR_PROFILE_NOT_FOUND(2019, "Không tìm thấy hồ sơ mentor", HttpStatus.NOT_FOUND),
     EMAIL_ALREADY_EXISTS(2020, "Email đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
     FORBIDDEN_OPERATION(2021, "Thao tác bị từ chối bởi hệ thống", HttpStatus.FORBIDDEN),
+    USE_CREATE_MENTOR_ENDPOINT(2022, "Vui lòng dùng API tạo mentor để gán vai trò MENTOR", HttpStatus.FORBIDDEN),
     ;
 
     private final int code;

@@ -86,7 +86,7 @@ public class MentorServiceImpl implements MentorService {
                 .build();
 
         try {
-            userRepository.save(mentor);
+            mentor = userRepository.saveAndFlush(mentor);
         } catch (DataIntegrityViolationException ex) {
             log.warn("Mentor creation rejected by trigger: {}", ex.getMessage());
             if (ex.getMessage() != null && ex.getMessage().contains("Only admins")) {
@@ -97,7 +97,6 @@ public class MentorServiceImpl implements MentorService {
 
         // Create mentor profile
         MentorProfile profile = MentorProfile.builder()
-                .userId(mentor.getUserId())
                 .user(mentor)
                 .mentorCreatedBy(currentUserId)
                 .specialization(request.getSpecialization())
@@ -106,7 +105,6 @@ public class MentorServiceImpl implements MentorService {
                 .biography(request.getBiography())
                 .hourlyRate(request.getHourlyRate())
                 .ratingAverage(BigDecimal.ZERO)
-                .mentorRegisteredAt(LocalDateTime.now())
                 .build();
 
         mentorProfileRepository.save(profile);
@@ -197,7 +195,6 @@ public class MentorServiceImpl implements MentorService {
 
         // Create student profile
         StudentProfile studentProfile = StudentProfile.builder()
-                .userId(mentorId)
                 .user(user)
                 .build();
         studentProfileRepository.save(studentProfile);

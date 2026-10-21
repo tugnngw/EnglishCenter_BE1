@@ -25,8 +25,9 @@ public class MentorSpecification {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
-            // Only active mentors
+            // Only active mentors with MENTOR role
             predicates.add(criteriaBuilder.equal(root.get("user").get("isActive"), true));
+            predicates.add(criteriaBuilder.equal(root.get("user").get("role").get("roleName"), "MENTOR"));
 
             // Filter by specialization
             if (specialization != null && !specialization.trim().isEmpty()) {
