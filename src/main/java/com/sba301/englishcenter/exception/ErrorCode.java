@@ -42,6 +42,8 @@ public enum ErrorCode {
     EMAIL_ALREADY_EXISTS(2020, "Email đã tồn tại trong hệ thống", HttpStatus.CONFLICT),
     FORBIDDEN_OPERATION(2021, "Thao tác bị từ chối bởi hệ thống", HttpStatus.FORBIDDEN),
     USE_CREATE_MENTOR_ENDPOINT(2022, "Vui lòng dùng API tạo mentor để gán vai trò MENTOR", HttpStatus.FORBIDDEN),
+    ROLE_CANNOT_BE_CHANGED(2023, "Vai trò của người dùng là cố định và không thể thay đổi thủ công", HttpStatus.BAD_REQUEST),
+    ALREADY_STUDENT(2024, "Người dùng đã là học viên", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

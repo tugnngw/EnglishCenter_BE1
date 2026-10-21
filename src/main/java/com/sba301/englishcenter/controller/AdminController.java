@@ -77,7 +77,7 @@ public class AdminController {
 
     @PostMapping("/users/{userId}/roles")
     @Operation(summary = "Assign role to user",
-            description = "Change user's role. Cannot remove last ADMIN role. Automatically manages profile tables.")
+            description = "Attempt to change user role. Roles are immutable in this system and will be rejected.")
     public ApiResponse<Void> assignRole(
             @PathVariable UUID userId,
             @Valid @RequestBody AssignRoleRequest request) {

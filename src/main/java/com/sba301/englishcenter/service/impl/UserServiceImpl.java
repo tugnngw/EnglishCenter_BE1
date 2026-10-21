@@ -88,86 +88,46 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional
     public void assignRole(UUID userId, AssignRoleRequest request) {
+        log.warn("Attempt to change role for userId: {} to role: {} was blocked. Roles are immutable via manual assignment.",
+                userId, request.getRoleName());
+        throw new AppException(ErrorCode.ROLE_CANNOT_BE_CHANGED);
+    }
+
+    @Override
+    @Transactional
+    public UserResponse upgradeToStudent(UUID userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        if ("MENTOR".equalsIgnoreCase(request.getRoleName())) {
-            throw new AppException(ErrorCode.USE_CREATE_MENTOR_ENDPOINT);
-        }
-
-        Role newRole = roleRepository.findByRoleName(request.getRoleName())
-                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
-
         String currentRoleName = user.getRole().getRoleName();
 
-        // Check if user already has this role
-        if (currentRoleName.equals(request.getRoleName())) {
-            throw new AppException(ErrorCode.USER_ALREADY_HAS_ROLE);
+        if ("STUDENT".equalsIgnoreCase(currentRoleName)) {
+            log.info("User {} is already a STUDENT", userId);
+            return toUserResponse(user);
         }
 
-        // Cannot remove last ADMIN
-        if ("ADMIN".equals(currentRoleName)) {
-            long adminCount = userRepository.countByRole_RoleName("ADMIN");
-            if (adminCount <= 1) {
-                throw new AppException(ErrorCode.CANNOT_REMOVE_LAST_ADMIN);
-            }
+        if (!"USER".equalsIgnoreCase(currentRoleName)) {
+            log.warn("Cannot upgrade user {} with role {} to STUDENT", userId, currentRoleName);
+            throw new AppException(ErrorCode.FORBIDDEN_OPERATION);
         }
 
-        UUID currentUserId = SecurityUtils.getCurrentUserId()
-                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+        Role studentRole = roleRepository.findByRoleName("STUDENT")
+                .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
 
-        // Set session variable for trigger validation
-        sessionVariableHelper.setCurrentUserId(currentUserId);
-
-        // Update role
-        user.setRole(newRole);
+        user.setRole(studentRole);
         user.setLastUpdated(LocalDateTime.now());
+        User savedUser = userRepository.save(user);
 
-        try {
-            userRepository.save(user);
-        } catch (DataIntegrityViolationException ex) {
-            log.warn("Role assignment rejected by trigger: {}", ex.getMessage());
-            if (ex.getMessage() != null && ex.getMessage().contains("Only admins")) {
-                throw new AppException(ErrorCode.FORBIDDEN_OPERATION);
-            }
-            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        // Create StudentProfile if not present
+        if (!studentProfileRepository.existsById(userId)) {
+            StudentProfile studentProfile = StudentProfile.builder()
+                    .user(savedUser)
+                    .build();
+            studentProfileRepository.save(studentProfile);
         }
 
-        // Handle profile creation/deletion based on new role
-        handleProfileTransition(user, currentRoleName, request.getRoleName());
-
-        log.info("Assigned role to user: userId={}, oldRole={}, newRole={}",
-                userId, currentRoleName, request.getRoleName());
-    }
-
-    /**
-     * Handle profile table transitions when role changes.
-     */
-    private void handleProfileTransition(User user, String oldRole, String newRole) {
-        UUID userId = user.getUserId();
-
-        // Remove old profile
-        switch (oldRole) {
-            case "MENTOR" -> mentorProfileRepository.deleteById(userId);
-            case "STUDENT" -> studentProfileRepository.deleteById(userId);
-            default -> {
-                // ADMIN has no profile
-            }
-        }
-
-        // Create new profile
-        switch (newRole) {
-            case "MENTOR" -> throw new AppException(ErrorCode.USE_CREATE_MENTOR_ENDPOINT);
-            case "STUDENT" -> {
-                StudentProfile studentProfile = StudentProfile.builder()
-                        .user(user)
-                        .build();
-                studentProfileRepository.save(studentProfile);
-            }
-            default -> {
-                // ADMIN has no profile
-            }
-        }
+        log.info("User {} successfully upgraded from USER to STUDENT upon course purchase", userId);
+        return toUserResponse(savedUser);
     }
 
     private UserResponse toUserResponse(User user) {

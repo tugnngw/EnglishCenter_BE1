@@ -57,7 +57,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.USER_EXISTED);
         }
 
-        Role studentRole = roleRepository.findByRoleName(RoleName.STUDENT.name())
+        Role defaultRole = roleRepository.findByRoleName(RoleName.USER.name())
                 .orElseThrow(() -> new AppException(ErrorCode.ROLE_NOT_FOUND));
 
         User user = User.builder()
@@ -65,17 +65,14 @@ public class AuthServiceImpl implements AuthService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
-                .role(studentRole)
+                .role(defaultRole)
                 .isActive(true)
                 .failedLoginAttempts(0)
                 .build();
 
         User savedUser = userRepository.save(user);
 
-        StudentProfile studentProfile = StudentProfile.builder()
-                .user(savedUser)
-                .build();
-        studentProfileRepository.save(studentProfile);
+        // StudentProfile is not created yet; it will be created when user purchases a course and upgrades to STUDENT.
 
         return toUserResponse(savedUser);
     }

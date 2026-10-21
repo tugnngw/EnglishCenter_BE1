@@ -9,7 +9,8 @@ public enum RoleName {
 
     ADMIN("ADMIN"),
     MENTOR("MENTOR"),
-    STUDENT("STUDENT");
+    STUDENT("STUDENT"),
+    USER("USER");
 
     private final String value;
 }

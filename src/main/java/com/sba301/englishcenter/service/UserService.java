@@ -39,11 +39,19 @@ public interface UserService {
 
     /**
      * Assign role to user.
-     * Cannot remove last ADMIN role.
-     * Creates/deletes profile tables accordingly.
+     * Roles are immutable; this operation is blocked by business policy.
      *
      * @param userId User ID
      * @param request Role assignment request
      */
     void assignRole(UUID userId, AssignRoleRequest request);
+
+    /**
+     * Upgrade a registered USER to STUDENT upon course purchase.
+     * Automatically creates StudentProfile.
+     *
+     * @param userId User ID
+     * @return Updated user response
+     */
+    UserResponse upgradeToStudent(UUID userId);
 }
