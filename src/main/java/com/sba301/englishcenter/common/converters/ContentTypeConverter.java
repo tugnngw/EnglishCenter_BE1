@@ -21,11 +21,10 @@ public class ContentTypeConverter implements AttributeConverter<ContentType, Str
         if (dbData == null) {
             return null;
         }
-        for (ContentType type : ContentType.values()) {
-            if (type.getValue().equalsIgnoreCase(dbData)) {
-                return type;
-            }
+        try {
+            return ContentType.fromValue(dbData);
+        } catch (IllegalArgumentException ex) {
+            return null;
         }
-        return null;
     }
 }

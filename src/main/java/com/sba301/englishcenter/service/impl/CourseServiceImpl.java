@@ -315,8 +315,11 @@ public class CourseServiceImpl implements CourseService {
     // ========================================================================
 
     private CourseStatus parseStatus(String status) {
+        if (status == null || status.trim().isEmpty()) {
+            throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
+        }
         try {
-            return CourseStatus.valueOf(status.trim().toUpperCase());
+            return CourseStatus.fromValue(status);
         } catch (IllegalArgumentException ex) {
             throw new AppException(ErrorCode.INVALID_COURSE_STATUS);
         }
@@ -329,8 +332,11 @@ public class CourseServiceImpl implements CourseService {
     }
 
     private ContentType parseContentType(String raw) {
+        if (raw == null || raw.trim().isEmpty()) {
+            throw new AppException(ErrorCode.COURSE_CONTENT_INVALID_TYPE);
+        }
         try {
-            return ContentType.valueOf(raw.trim().toUpperCase());
+            return ContentType.fromValue(raw);
         } catch (IllegalArgumentException ex) {
             throw new AppException(ErrorCode.COURSE_CONTENT_INVALID_TYPE);
         }

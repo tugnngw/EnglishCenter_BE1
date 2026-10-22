@@ -21,11 +21,10 @@ public class CourseStatusConverter implements AttributeConverter<CourseStatus, S
         if (dbData == null) {
             return null;
         }
-        for (CourseStatus status : CourseStatus.values()) {
-            if (status.getValue().equalsIgnoreCase(dbData)) {
-                return status;
-            }
+        try {
+            return CourseStatus.fromValue(dbData);
+        } catch (IllegalArgumentException ex) {
+            return null;
         }
-        return null;
     }
 }

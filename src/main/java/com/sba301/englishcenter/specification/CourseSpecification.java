@@ -66,7 +66,7 @@ public class CourseSpecification {
                 predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("targetScore"), targetScore));
             }
 
-            // Filter by status (status dùng AttributeConverter nên so sánh với kiểu enum Java)
+            // Filter by status (PostgreSQL native enum course_status_enum với giá trị chữ thường)
             if (status != null && !status.trim().isEmpty()) {
                 CourseStatus statusEnum = parseStatus(status);
                 if (statusEnum != null) {
@@ -83,8 +83,11 @@ public class CourseSpecification {
      * Trả về null nếu không hợp lệ (bỏ qua filter thay vì ném lỗi).
      */
     private static CourseStatus parseStatus(String status) {
+        if (status == null || status.trim().isEmpty()) {
+            return null;
+        }
         try {
-            return CourseStatus.valueOf(status.trim().toUpperCase());
+            return CourseStatus.fromValue(status);
         } catch (IllegalArgumentException ex) {
             return null;
         }
