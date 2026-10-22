@@ -9,6 +9,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.stream.Collectors;
 
@@ -54,6 +55,21 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex) {
         ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
+        return ResponseEntity
+                .status(errorCode.getHttpStatus())
+                .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));
+    }
+
+    /**
+     * Path variable / request param sai kiểu (VD: {@code /courses/ielts-intensive-mastery}
+     * trong khi {@code courseId} là UUID) — Spring ném
+     * {@link MethodArgumentTypeMismatchException}. Trả 400 thay vì 500 để
+     * Frontend hiển thị được thông báo rõ ràng.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        log.warn("Type mismatch on '{}' = '{}'", ex.getName(), ex.getValue());
+        ErrorCode errorCode = ErrorCode.INVALID_IDENTIFIER;
         return ResponseEntity
                 .status(errorCode.getHttpStatus())
                 .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));

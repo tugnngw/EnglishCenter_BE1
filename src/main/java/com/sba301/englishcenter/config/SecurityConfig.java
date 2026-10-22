@@ -57,6 +57,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/mentors/**").permitAll()
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/v1/certificates",
+                                "/api/v1/certificates/**",
+                                "/api/v1/courses",
+                                "/api/v1/courses/**"
+                        ).permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/logout",
                                 "/api/v1/auth/change-password",

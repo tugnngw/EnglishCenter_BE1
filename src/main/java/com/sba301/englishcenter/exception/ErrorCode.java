@@ -44,6 +44,17 @@ public enum ErrorCode {
     USE_CREATE_MENTOR_ENDPOINT(2022, "Vui lòng dùng API tạo mentor để gán vai trò MENTOR", HttpStatus.FORBIDDEN),
     ROLE_CANNOT_BE_CHANGED(2023, "Vai trò của người dùng là cố định và không thể thay đổi thủ công", HttpStatus.BAD_REQUEST),
     ALREADY_STUDENT(2024, "Người dùng đã là học viên", HttpStatus.BAD_REQUEST),
+
+    // === Dev 2 - Course & Learning Content Management ===
+    CERTIFICATE_NOT_FOUND(3001, "Không tìm thấy chứng chỉ", HttpStatus.NOT_FOUND),
+    CERTIFICATE_PART_NOT_FOUND(3002, "Không tìm thấy phần của chứng chỉ", HttpStatus.NOT_FOUND),
+    COURSE_NOT_FOUND(3003, "Không tìm thấy khóa học", HttpStatus.NOT_FOUND),
+    COURSE_CODE_EXISTED(3004, "Mã khóa học đã tồn tại", HttpStatus.CONFLICT),
+    COURSE_CONTENT_NOT_FOUND(3005, "Không tìm thấy nội dung khóa học", HttpStatus.NOT_FOUND),
+    COURSE_CONTENT_INVALID_TYPE(3006, "Loại nội dung không hợp lệ", HttpStatus.BAD_REQUEST),
+    HOMEWORK_SUBMISSION_NOT_FOUND(3007, "Không tìm thấy bài nộp", HttpStatus.NOT_FOUND),
+    INVALID_COURSE_STATUS(3008, "Trạng thái khóa học không hợp lệ", HttpStatus.BAD_REQUEST),
+    INVALID_IDENTIFIER(3009, "Định danh không hợp lệ (phải là UUID)", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;
