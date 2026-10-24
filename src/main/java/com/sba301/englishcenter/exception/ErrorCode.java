@@ -55,6 +55,15 @@ public enum ErrorCode {
     HOMEWORK_SUBMISSION_NOT_FOUND(3007, "Không tìm thấy bài nộp", HttpStatus.NOT_FOUND),
     INVALID_COURSE_STATUS(3008, "Trạng thái khóa học không hợp lệ", HttpStatus.BAD_REQUEST),
     INVALID_IDENTIFIER(3009, "Định danh không hợp lệ (phải là UUID)", HttpStatus.BAD_REQUEST),
+    // === Dev 4 - Payment & Enrollment ===
+    PAYMENT_ORDER_NOT_FOUND(4001, "Không tìm thấy đơn thanh toán", HttpStatus.NOT_FOUND),
+    COURSE_NOT_PURCHASABLE(4002, "Khóa học chưa mở bán hoặc giá không hợp lệ", HttpStatus.BAD_REQUEST),
+    ALREADY_ENROLLED(4003, "Bạn đã đăng ký khóa học này", HttpStatus.CONFLICT),
+    PAYMENT_ORDER_NOT_PENDING(4004, "Chỉ có thể hủy đơn đang chờ thanh toán", HttpStatus.CONFLICT),
+    SEPAY_NOT_CONFIGURED(4005, "Chưa cấu hình đầy đủ SePay", HttpStatus.SERVICE_UNAVAILABLE),
+    INVALID_WEBHOOK_SIGNATURE(4006, "Chữ ký webhook không hợp lệ hoặc đã hết hạn", HttpStatus.UNAUTHORIZED),
+    ENROLLMENT_REQUIRED(4007, "Bạn cần đăng ký khóa học để truy cập nội dung này", HttpStatus.FORBIDDEN),
+    INVALID_WEBHOOK_DATA(4008, "Dữ liệu webhook không hợp lệ", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

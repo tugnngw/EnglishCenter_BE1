@@ -201,7 +201,7 @@ public class CourseServiceImpl implements CourseService {
         ensureCourseExists(courseId);
 
         UUID currentUserId = SecurityUtils.getCurrentUserId().orElse(null);
-        boolean isEnrolled = currentUserId != null && enrollmentChecker.isEnrolled(currentUserId, courseId);
+        boolean isEnrolled = enrollmentChecker.canAccessContent(currentUserId, courseId);
 
         List<CourseContent> contents =
                 courseContentRepository.findByCourse_CourseIdOrderByContentOrderAsc(courseId);
@@ -217,7 +217,7 @@ public class CourseServiceImpl implements CourseService {
         ensureCourseExists(courseId);
 
         UUID currentUserId = SecurityUtils.getCurrentUserId().orElse(null);
-        boolean isEnrolled = currentUserId != null && enrollmentChecker.isEnrolled(currentUserId, courseId);
+        boolean isEnrolled = enrollmentChecker.canAccessContent(currentUserId, courseId);
 
         List<CourseContent> contents =
                 courseContentRepository.findByCourse_CourseIdAndContentTypeOrderByContentOrderAsc(courseId, ContentType.VOCABULARY);
@@ -233,7 +233,7 @@ public class CourseServiceImpl implements CourseService {
         ensureCourseExists(courseId);
 
         UUID currentUserId = SecurityUtils.getCurrentUserId().orElse(null);
-        boolean isEnrolled = currentUserId != null && enrollmentChecker.isEnrolled(currentUserId, courseId);
+        boolean isEnrolled = enrollmentChecker.canAccessContent(currentUserId, courseId);
 
         List<CourseContent> contents =
                 courseContentRepository.findByCourse_CourseIdAndContentTypeOrderByContentOrderAsc(courseId, ContentType.HOMEWORK);
@@ -412,12 +412,12 @@ public class CourseServiceImpl implements CourseService {
      *       <li>Bài có isPreview = false → bị khóa, ẩn videoUrl, đánh isLocked = true.</li>
      *     </ul>
      *   </li>
-     *   <li>Bài vocabulary / homework không có videoUrl: chỉ tiêu đề + contentData.</li>
+     *   <li>Nội dung bị khóa chỉ trả metadata, không trả description hoặc contentData.</li>
      * </ul>
      */
     private CourseContentResponse buildContentResponse(CourseContent content, UUID currentUserId, boolean isEnrolled) {
         boolean isPreview = JsonUtil.readBoolean(content.getContentData(), "isPreview", false);
-        boolean locked = !isEnrolled && !isPreview && content.getContentType() == ContentType.LESSON;
+        boolean locked = !isEnrolled && !isPreview;
 
         String videoUrl = locked ? null : JsonUtil.readString(content.getContentData(), "videoUrl");
 
@@ -427,9 +427,9 @@ public class CourseServiceImpl implements CourseService {
                 .contentType(content.getContentType() != null ? content.getContentType().getValue() : null)
                 .parentContentId(content.getParentContent() != null ? content.getParentContent().getContentId() : null)
                 .title(content.getTitle())
-                .description(content.getDescription())
+                .description(locked ? null : content.getDescription())
                 .contentOrder(content.getContentOrder())
-                .contentData(JsonUtil.parse(content.getContentData()))
+                .contentData(locked ? null : JsonUtil.parse(content.getContentData()))
                 .isPreview(isPreview)
                 .isLocked(locked)
                 .videoUrl(videoUrl)

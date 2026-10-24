@@ -33,6 +33,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
     private final CourseContentRepository courseContentRepository;
     private final UserRepository userRepository;
     private final SessionVariableHelper sessionVariableHelper;
+    private final com.sba301.englishcenter.service.EnrollmentService enrollments;
 
     @Override
     @Transactional
@@ -49,6 +50,9 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
                     "Nội dung trỏ tới không phải bài tập (homework)");
         }
 
+        if (!enrollments.isEnrolled(studentId, homework.getCourse().getCourseId())) {
+            throw new AppException(ErrorCode.ENROLLMENT_REQUIRED);
+        }
         sessionVariableHelper.setCurrentUserId(studentId);
 
         User student = userRepository.findById(studentId)
