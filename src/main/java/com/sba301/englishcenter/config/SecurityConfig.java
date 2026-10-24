@@ -62,7 +62,9 @@ public class SecurityConfig {
                                 "/api/v1/certificates",
                                 "/api/v1/certificates/**",
                                 "/api/v1/courses",
-                                "/api/v1/courses/**"
+                                "/api/v1/courses/**",
+                                "/api/v1/exams",
+                                "/api/v1/exams/*"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/logout",
