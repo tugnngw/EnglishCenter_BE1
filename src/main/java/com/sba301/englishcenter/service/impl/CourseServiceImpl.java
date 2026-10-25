@@ -60,6 +60,12 @@ public class CourseServiceImpl implements CourseService {
     private final CourseContentRepository courseContentRepository;
     private final SessionEnrollmentChecker enrollmentChecker;
 
+    @Override
+    @Transactional(readOnly = true)
+    public boolean existsContent(UUID contentId) {
+        return contentId != null && courseContentRepository.existsById(contentId);
+    }
+
     // ========================================================================
     // CATALOG & CRUD
     // ========================================================================

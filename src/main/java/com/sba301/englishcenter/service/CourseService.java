@@ -42,5 +42,8 @@ public interface CourseService {
 
     CourseContentResponse createContent(UUID courseId, CreateCourseContentRequest request);
 
+    /** Nội dung khóa học có tồn tại không (Dev 5 dùng khi gắn bài học vào lịch học cá nhân). */
+    boolean existsContent(UUID contentId);
+
     CourseContentResponse updateContent(UUID contentId, UpdateCourseContentRequest request);
 }

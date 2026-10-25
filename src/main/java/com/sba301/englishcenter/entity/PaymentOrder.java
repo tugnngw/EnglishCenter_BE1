@@ -1,6 +1,7 @@
 package com.sba301.englishcenter.entity;
 
 import com.sba301.englishcenter.common.enums.PaymentOrderStatus;
+import com.sba301.englishcenter.common.enums.PaymentOrderType;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -14,7 +15,11 @@ public class PaymentOrder {
     @Id private UUID orderId;
     @Column(nullable = false, unique = true) private String orderCode;
     @Column(nullable = false) private UUID studentId;
-    @Column(nullable = false) private UUID courseId;
+    // COURSE: courseId bắt buộc. MENTOR_SESSION: courseId null, bookingId bắt buộc (V7)
+    @Enumerated(EnumType.STRING) @Builder.Default private PaymentOrderType orderType = PaymentOrderType.COURSE;
+    private UUID courseId;
+    private UUID bookingId;
+    // Tên hiển thị của đơn: tên khóa học hoặc "Buổi kèm 1-1 với mentor ..."
     private String courseTitle;
     private BigDecimal amount;
     private String bankCode;

@@ -35,6 +35,9 @@ public interface ExamAttemptService {
 
     AttemptResultResponse getMyAttemptResult(UUID attemptId);
 
+    /** Học viên đã thi đạt đề này chưa (Dev 5 dùng để tính tiến độ Learning Path). */
+    boolean hasPassedExam(UUID studentId, UUID examId);
+
     /** Tự nộp các lượt thi đã quá hạn (job định kỳ). @return số lượt đã đóng. */
     int autoCloseOverdueAttempts();
 }

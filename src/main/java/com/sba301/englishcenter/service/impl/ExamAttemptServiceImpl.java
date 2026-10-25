@@ -256,6 +256,12 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     // ============================================
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean hasPassedExam(UUID studentId, UUID examId) {
+        return attemptRepository.existsByExam_ExamIdAndStudent_UserIdAndPassedTrue(examId, studentId);
+    }
+
+    @Override
     @Transactional
     public int autoCloseOverdueAttempts() {
         LocalDateTime now = LocalDateTime.now();

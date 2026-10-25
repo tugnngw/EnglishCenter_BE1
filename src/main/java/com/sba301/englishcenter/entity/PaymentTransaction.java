@@ -17,6 +17,8 @@ public class PaymentTransaction {
     @Id private UUID transactionId;
     private UUID studentId;
     private UUID courseId;
+    // Buổi kèm 1-1 đã thanh toán (transaction_type = mentor_session)
+    private UUID mentorScheduleId;
     private UUID orderId;
     private BigDecimal amount;
     private String paymentMethod;

@@ -57,6 +57,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, "/api/v1/payments/sepay/webhook").permitAll()
                         .requestMatchers(PUBLIC_ENDPOINTS).permitAll()
+                        // Dev 5: bắt tay WebSocket; xác thực JWT ở frame STOMP CONNECT (StompAuthChannelInterceptor)
+                        .requestMatchers("/ws-connect", "/ws-connect/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/mentors/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
                                 "/api/v1/certificates",
@@ -64,7 +66,12 @@ public class SecurityConfig {
                                 "/api/v1/courses",
                                 "/api/v1/courses/**",
                                 "/api/v1/exams",
-                                "/api/v1/exams/*"
+                                "/api/v1/exams/*",
+                                // Dev 5: Learning Path + kho đề luyện tập AI xem công khai
+                                "/api/v1/learning-paths",
+                                "/api/v1/learning-paths/*",
+                                "/api/v1/practice-exams",
+                                "/api/v1/practice-exams/*"
                         ).permitAll()
                         .requestMatchers(
                                 "/api/v1/auth/logout",

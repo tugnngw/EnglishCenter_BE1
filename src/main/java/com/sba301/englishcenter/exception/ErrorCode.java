@@ -88,6 +88,40 @@ public enum ErrorCode {
     QUESTION_IN_USE(5021, "Câu hỏi đã có học viên trả lời, không thể chỉnh sửa", HttpStatus.CONFLICT),
     INVALID_EXAM_SCOPE(5022, "Phạm vi đề thi không hợp lệ", HttpStatus.BAD_REQUEST),
     EXAM_QUESTION_ALREADY_ADDED(5023, "Câu hỏi đã có trong đề thi", HttpStatus.CONFLICT),
+
+    // === Dev 5 - Mentor Schedule ===
+    SCHEDULE_NOT_FOUND(6001, "Không tìm thấy lịch", HttpStatus.NOT_FOUND),
+    INVALID_SCHEDULE_TIME(6002, "Giờ kết thúc phải sau giờ bắt đầu", HttpStatus.BAD_REQUEST),
+    SCHEDULE_TIME_CONFLICT(6003, "Khung giờ bị trùng với lịch khác", HttpStatus.CONFLICT),
+    SCHEDULE_NOT_AVAILABLE(6004, "Lịch này không còn trống", HttpStatus.CONFLICT),
+    MENTOR_HOURLY_RATE_NOT_SET(6005, "Mentor chưa được cấu hình học phí theo giờ", HttpStatus.BAD_REQUEST),
+    SCHEDULE_HAS_BOOKING(6006, "Slot đã có học viên đặt, không thể sửa hoặc xóa", HttpStatus.CONFLICT),
+    SCHEDULE_STATUS_INVALID(6007, "Chỉ được mở (available) hoặc đóng (cancelled) slot", HttpStatus.BAD_REQUEST),
+    BOOKING_NOT_FOUND(6008, "Không tìm thấy lịch hẹn", HttpStatus.NOT_FOUND),
+    BOOKING_NOT_CANCELLABLE(6009, "Lịch hẹn ở trạng thái này không thể hủy hoặc đổi", HttpStatus.BAD_REQUEST),
+    BOOKING_CANCEL_DEADLINE_PASSED(6010, "Đã quá thời hạn được hủy hoặc đổi lịch", HttpStatus.BAD_REQUEST),
+    RESCHEDULE_MENTOR_MISMATCH(6011, "Chỉ được đổi sang slot của cùng mentor", HttpStatus.BAD_REQUEST),
+    BOOKING_STATUS_INVALID(6012, "Trạng thái lịch hẹn không hợp lệ", HttpStatus.BAD_REQUEST),
+    BOOKING_NOT_STARTED(6013, "Buổi học chưa bắt đầu, chưa thể cập nhật kết quả", HttpStatus.BAD_REQUEST),
+    NOTIFICATION_NOT_FOUND(6014, "Không tìm thấy thông báo", HttpStatus.NOT_FOUND),
+    // Dev 5 x Dev 4: thanh toán buổi kèm 1-1 qua SePay
+    SESSION_PRICE_INVALID(6015, "Giá buổi học không hợp lệ để thanh toán (phải là số nguyên VND lớn hơn 0)", HttpStatus.BAD_REQUEST),
+    BOOKING_PAYMENT_PENDING(6016, "Lịch hẹn chưa được thanh toán, hãy thanh toán hoặc hủy rồi đặt lại", HttpStatus.BAD_REQUEST),
+    RESCHEDULE_PRICE_MISMATCH(6017, "Chỉ được đổi sang slot có cùng giá với buổi đã thanh toán", HttpStatus.BAD_REQUEST),
+    // Dev 5: lịch học cá nhân (TASK-D5-01)
+    STUDY_SCHEDULE_NOT_FOUND(6018, "Không tìm thấy lịch học", HttpStatus.NOT_FOUND),
+    STUDY_SCHEDULE_TIME_INVALID(6019, "Thời gian học phải ở tương lai", HttpStatus.BAD_REQUEST),
+    // Dev 5: Learning Path (TASK-D5-03)
+    LEARNING_PATH_NOT_FOUND(6020, "Không tìm thấy lộ trình học", HttpStatus.NOT_FOUND),
+    LEARNING_PATH_ITEM_INVALID(6021, "Chặng của lộ trình không hợp lệ (trùng chặng hoặc điểm mục tiêu chỉ dùng cho đề luyện tập)", HttpStatus.BAD_REQUEST),
+    LEARNING_PATH_HAS_STUDENTS(6022, "Lộ trình đã có học viên ghi danh, không thể xóa", HttpStatus.CONFLICT),
+    // Dev 5: AI Practice (TASK-D5-04)
+    PRACTICE_EXAM_NOT_FOUND(6023, "Không tìm thấy đề luyện tập", HttpStatus.NOT_FOUND),
+    PRACTICE_ANSWER_NOT_FOUND(6024, "Không tìm thấy bài làm", HttpStatus.NOT_FOUND),
+    PRACTICE_EVALUATION_NOT_FOUND(6025, "Không tìm thấy kết quả chấm", HttpStatus.NOT_FOUND),
+    PRACTICE_EXAM_HAS_ANSWERS(6026, "Đề luyện tập đã có bài làm, không thể xóa", HttpStatus.CONFLICT),
+    AI_NOT_CONFIGURED(6027, "Chưa cấu hình dịch vụ AI chấm bài", HttpStatus.SERVICE_UNAVAILABLE),
+    AI_EVALUATION_FAILED(6028, "AI chấm bài thất bại, vui lòng thử lại sau", HttpStatus.BAD_GATEWAY),
     ;
 
     private final int code;

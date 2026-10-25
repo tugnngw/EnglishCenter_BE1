@@ -72,6 +72,13 @@ Zero/null/fractional prices are not purchasable in this paid-course flow.
 Poll the order endpoint every few seconds while pending; stop at a terminal state or timeout.
 Display `qrUrl` only while pending. Cancelling locally cannot prevent a bank transfer to an already-copied QR.
 
+### Mentor session orders (Dev 5)
+
+`POST /api/v1/bookings` also creates a `MENTOR_SESSION` order (`orderType`, `bookingId`, `courseId=null`) using
+`mentor_schedules.price`. Order responses now include `orderType` and `bookingId`; course orders are unchanged.
+Settlement of a session order records a `mentor_session` transaction and confirms the booking (no enrollment, no role change).
+Expiry/cancel of a session order cancels the pending booking and reopens the slot. See `docs/DEV5_SCHEDULE_BOOKING_API.md` section 5.
+
 ## Settlement and access
 
 Signature: `X-SePay-Signature: sha256=<hex HMAC-SHA256>` over exact UTF-8

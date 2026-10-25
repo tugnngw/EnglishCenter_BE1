@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.CourseStatus;
 import com.sba301.englishcenter.common.enums.PaymentOrderStatus;
+import com.sba301.englishcenter.common.enums.PaymentOrderType;
 import com.sba301.englishcenter.config.SePayProperties;
 import com.sba301.englishcenter.dto.response.PaymentOrderResponse;
 import com.sba301.englishcenter.entity.*;
@@ -26,6 +27,9 @@ import java.util.UUID;
 
 @Service @RequiredArgsConstructor
 public class PaymentServiceImpl implements PaymentService {
+    // Lý do ghi vào booking khi đơn buổi kèm 1-1 không được thanh toán (Dev 5)
+    static final String SESSION_EXPIRED_REASON = "Hết hạn thanh toán";
+    static final String SESSION_CANCELLED_REASON = "Học viên hủy thanh toán";
     private final PaymentOrderRepository orders;
     private final PaymentTransactionRepository transactions;
     private final CourseRepository courses;
@@ -34,6 +38,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final SePayProperties config;
     private final SePayWebhookVerifier verifier;
     private final JdbcTemplate jdbc;
+    private final BookingPaymentService bookingPayments;
     private final ObjectMapper json = new ObjectMapper();
 
     @Override @Transactional
@@ -50,7 +55,7 @@ public class PaymentServiceImpl implements PaymentService {
         BigDecimal price = course.getPrice();
         if (course.getStatus() != CourseStatus.ACTIVE || price == null || price.signum() <= 0
                 || price.stripTrailingZeros().scale() > 0) throw new AppException(ErrorCode.COURSE_NOT_PURCHASABLE);
-        orders.expirePending(Instant.now());
+        expireDueOrders();
         var existing = orders.findByStudentIdAndCourseIdAndStatus(studentId, courseId, PaymentOrderStatus.PENDING);
         if (existing.isPresent()) return response(existing.get());
         Long sequence = jdbc.queryForObject("select nextval('payment_order_code_seq')", Long.class);
@@ -77,7 +82,36 @@ public class PaymentServiceImpl implements PaymentService {
         if (order.getStatus() == PaymentOrderStatus.CANCELLED || order.getStatus() == PaymentOrderStatus.EXPIRED) return response(order);
         if (order.getStatus() != PaymentOrderStatus.PENDING) throw new AppException(ErrorCode.PAYMENT_ORDER_NOT_PENDING);
         order.setStatus(PaymentOrderStatus.CANCELLED);
+        releaseBooking(order, SESSION_CANCELLED_REASON);
         return response(order);
+    }
+
+    // ===== Dev 5: đơn MENTOR_SESSION cho buổi kèm 1-1 =====
+
+    @Override @Transactional
+    public PaymentOrderResponse createMentorSessionOrder(UUID studentId, UUID bookingId, BigDecimal amount, String title) {
+        checkConfiguration();
+        // SePay chỉ nhận số tiền nguyên VND > 0
+        if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 0) {
+            throw new AppException(ErrorCode.SESSION_PRICE_INVALID);
+        }
+        Long sequence = jdbc.queryForObject("select nextval('payment_order_code_seq')", Long.class);
+        Instant now = Instant.now();
+        var order = PaymentOrder.builder().orderId(UUID.randomUUID()).orderCode(config.getPaymentPrefix() + sequence)
+                .orderType(PaymentOrderType.MENTOR_SESSION).bookingId(bookingId)
+                .studentId(studentId).courseTitle(title).amount(amount)
+                .bankCode(config.getBankCode()).accountNumber(config.getAccountNumber()).accountName(config.getAccountName())
+                .status(PaymentOrderStatus.PENDING).createdAt(now)
+                .expiresAt(now.plusSeconds(config.getOrderExpiryMinutes() * 60L)).build();
+        return response(orders.save(order));
+    }
+
+    @Override @Transactional
+    public void cancelPendingBookingOrder(UUID bookingId) {
+        orders.findFirstByBookingIdAndStatus(bookingId, PaymentOrderStatus.PENDING)
+                .flatMap(found -> orders.lockByCode(found.getOrderCode()))
+                .filter(order -> order.getStatus() == PaymentOrderStatus.PENDING)
+                .ifPresent(order -> order.setStatus(PaymentOrderStatus.CANCELLED));
     }
 
     @Override @Transactional(readOnly = true)
@@ -134,6 +168,7 @@ public class PaymentServiceImpl implements PaymentService {
             order.setStatus(PaymentOrderStatus.REVIEW_REQUIRED);
             outcome(eventId, "AMOUNT_OR_ORDER_STATE_REVIEW_REQUIRED"); return;
         }
+        if (order.getOrderType() == PaymentOrderType.MENTOR_SESSION) { settleMentorSession(order, event, eventId); return; }
         // Record and grant entitlement atomically. A retry rolls everything back on any DB failure.
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         var transaction = PaymentTransaction.builder().transactionId(UUID.randomUUID())
@@ -165,8 +200,47 @@ public class PaymentServiceImpl implements PaymentService {
         outcome(eventId, "PAID");
     }
 
+    // Dev 5: booking chuyển confirmed + ghi giao dịch mentor_session trong cùng transaction với webhook
+    private void settleMentorSession(PaymentOrder order, JsonNode event, long eventId) {
+        UUID scheduleId = bookingPayments.confirmPaidBooking(order.getBookingId());
+        if (scheduleId == null) {
+            // Booking đã bị hủy trước khi tiền về: giữ tiền chờ đối soát, không xác nhận lịch
+            order.setStatus(PaymentOrderStatus.REVIEW_REQUIRED);
+            outcome(eventId, "BOOKING_NOT_PENDING_REVIEW_REQUIRED"); return;
+        }
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        var transaction = PaymentTransaction.builder().transactionId(UUID.randomUUID())
+                .orderId(order.getOrderId()).studentId(order.getStudentId()).mentorScheduleId(scheduleId)
+                .amount(order.getAmount()).paymentMethod("SEPAY").transactionType(PaymentTransaction.Type.mentor_session)
+                .transactionStatus(PaymentTransaction.Status.pending).sepayTransactionId(eventId)
+                .providerReference(event.path("referenceCode").asText("")).createdAt(now).lastUpdated(now).build();
+        transactions.saveAndFlush(transaction);
+        transaction.setTransactionStatus(PaymentTransaction.Status.success);
+        transaction.setPaymentDate(now);
+        transactions.saveAndFlush(transaction);
+        order.setStatus(PaymentOrderStatus.PAID);
+        order.setPaidAt(Instant.now());
+        outcome(eventId, "PAID");
+    }
+
     @Scheduled(fixedDelay = 60000) @Transactional
-    public void expireOrders() { orders.expirePending(Instant.now()); }
+    public void expireOrders() { expireDueOrders(); }
+
+    // Hết hạn đơn quá hạn; đơn buổi kèm thì hủy booking pending và mở lại slot (Dev 5)
+    private void expireDueOrders() {
+        Instant now = Instant.now();
+        for (PaymentOrder order : orders.lockExpiredSessionOrders(now)) {
+            order.setStatus(PaymentOrderStatus.EXPIRED);
+            releaseBooking(order, SESSION_EXPIRED_REASON);
+        }
+        orders.expirePending(now);
+    }
+
+    private void releaseBooking(PaymentOrder order, String reason) {
+        if (order.getOrderType() == PaymentOrderType.MENTOR_SESSION) {
+            bookingPayments.releaseUnpaidBooking(order.getBookingId(), reason);
+        }
+    }
 
     private void outcome(long id, String outcome) {
         jdbc.update("update sepay_webhook_events set outcome = ? where sepay_id = ?", outcome, id);
@@ -181,6 +255,7 @@ public class PaymentServiceImpl implements PaymentService {
     private void expire(PaymentOrder order) {
         if (order.getStatus() == PaymentOrderStatus.PENDING && !order.getExpiresAt().isAfter(Instant.now())) {
             order.setStatus(PaymentOrderStatus.EXPIRED);
+            releaseBooking(order, SESSION_EXPIRED_REASON);
         }
     }
 
@@ -204,7 +279,8 @@ public class PaymentServiceImpl implements PaymentService {
                 + "&des=" + encode(order.getOrderCode()) : null;
         return new PaymentOrderResponse(order.getOrderId(), order.getOrderCode(), order.getStudentId(), order.getCourseId(), order.getCourseTitle(),
                 order.getAmount(), "VND", status, order.getCreatedAt(), order.getExpiresAt(), order.getPaidAt(),
-                order.getBankCode(), order.getAccountNumber(), order.getAccountName(), order.getOrderCode(), qr);
+                order.getBankCode(), order.getAccountNumber(), order.getAccountName(), order.getOrderCode(), qr,
+                order.getOrderType(), order.getBookingId());
     }
 
     private String encode(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }
