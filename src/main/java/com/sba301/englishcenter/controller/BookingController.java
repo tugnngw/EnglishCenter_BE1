@@ -35,7 +35,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
-@Tag(name = "Booking", description = "Đặt lịch 1-1 với Mentor (TASK D5-06 -> D5-14)")
+@Tag(name = "Booking", description = "Đặt lịch 1-1 với Mentor")
 public class BookingController {
 
     // type = "past" -> lịch đã qua, giá trị khác -> lịch sắp tới

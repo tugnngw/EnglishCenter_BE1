@@ -25,7 +25,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/notifications")
 @RequiredArgsConstructor
 @PreAuthorize("isAuthenticated()")
-@Tag(name = "Notification", description = "Thông báo trong ứng dụng của người dùng đang đăng nhập (TASK D5-16)")
+@Tag(name = "Notification", description = "Thông báo trong ứng dụng của người dùng đang đăng nhập")
 public class NotificationController {
 
     private final NotificationService notificationService;

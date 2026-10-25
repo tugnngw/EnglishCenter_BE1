@@ -33,7 +33,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/practice-exams")
 @RequiredArgsConstructor
-@Tag(name = "AI Practice", description = "Luyện đề Writing / Speaking tự do, AI (Gemini) chấm theo 4 tiêu chí IELTS (TASK-D5-04)")
+@Tag(name = "AI Practice", description = "Luyện đề Writing / Speaking tự do, AI (Gemini) chấm theo 4 tiêu chí IELTS")
 public class PracticeExamController {
 
     private final PracticeExamService practiceExamService;

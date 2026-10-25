@@ -26,7 +26,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/admin/learning-paths")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Admin - Learning Path", description = "Admin quản lý lộ trình học qua Swagger (TASK-D5-03)")
+@Tag(name = "Admin - Learning Path", description = "Admin quản lý lộ trình học qua Swagger")
 public class AdminLearningPathController {
 
     private final LearningPathService learningPathService;

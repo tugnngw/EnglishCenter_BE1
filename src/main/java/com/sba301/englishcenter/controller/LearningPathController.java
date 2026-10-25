@@ -27,7 +27,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
-@Tag(name = "Learning Path", description = "Lộ trình học theo chứng chỉ và tiến độ học viên (TASK-D5-03)")
+@Tag(name = "Learning Path", description = "Lộ trình học theo chứng chỉ và tiến độ học viên")
 public class LearningPathController {
 
     private final LearningPathService learningPathService;

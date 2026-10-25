@@ -35,7 +35,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 // Lịch học cá nhân: người học (USER chưa mua khóa / STUDENT)
 @PreAuthorize("hasAnyRole('USER', 'STUDENT')")
-@Tag(name = "Study Schedule", description = "Lịch nhắc học tập cá nhân (TASK-D5-01). Thời gian ISO-8601 UTC")
+@Tag(name = "Study Schedule", description = "Lịch nhắc học tập cá nhân. Thời gian ISO-8601 UTC")
 public class StudyScheduleController {
 
     private final StudyScheduleService studyScheduleService;

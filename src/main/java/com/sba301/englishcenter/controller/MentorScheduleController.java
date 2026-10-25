@@ -33,7 +33,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1")
 @RequiredArgsConstructor
-@Tag(name = "Mentor Availability", description = "Slot thời gian rảnh của Mentor (TASK D5-02 -> D5-05)")
+@Tag(name = "Mentor Availability", description = "Slot thời gian rảnh của Mentor")
 public class MentorScheduleController {
 
     private final MentorScheduleService mentorScheduleService;

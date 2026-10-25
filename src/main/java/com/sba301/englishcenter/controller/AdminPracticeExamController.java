@@ -26,7 +26,7 @@ import java.util.UUID;
 @RequestMapping("/api/v1/admin/practice-exams")
 @RequiredArgsConstructor
 @PreAuthorize("hasRole('ADMIN')")
-@Tag(name = "Admin - AI Practice", description = "Admin quản lý kho đề luyện tập Writing / Speaking (TASK-D5-04)")
+@Tag(name = "Admin - AI Practice", description = "Admin quản lý kho đề luyện tập Writing / Speaking")
 public class AdminPracticeExamController {
 
     private final PracticeExamService practiceExamService;
