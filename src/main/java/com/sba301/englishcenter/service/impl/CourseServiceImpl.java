@@ -316,6 +316,32 @@ public class CourseServiceImpl implements CourseService {
         return buildContentResponse(content, currentUserId, true);
     }
 
+    @Override
+    @Transactional
+    public void deleteContent(UUID contentId) {
+        CourseContent content = courseContentRepository.findById(contentId)
+                .orElseThrow(() -> new AppException(ErrorCode.COURSE_CONTENT_NOT_FOUND));
+
+        UUID currentUserId = SecurityUtils.getCurrentUserId()
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+        sessionVariableHelper.setCurrentUserId(currentUserId);
+
+        // Nội dung con tham chiếu tới nội dung cha — thả FK để tránh vi phạm ràng buộc.
+        // (FK parent_content_id cũng ON DELETE CASCADE, nhưng xoá tường minh giúp
+        //  hành vi rõ ràng và không phụ thuộc vào mức độ trigger của DB.)
+        List<CourseContent> children = courseContentRepository.findByParentContent_ContentId(contentId);
+        for (CourseContent child : children) {
+            child.setParentContent(null);
+        }
+        if (!children.isEmpty()) {
+            courseContentRepository.saveAll(children);
+        }
+
+        courseContentRepository.delete(content);
+
+        log.info("Đã xoá nội dung khóa học: contentId={}, type={}", contentId, content.getContentType());
+    }
+
     // ========================================================================
     // Helpers
     // ========================================================================

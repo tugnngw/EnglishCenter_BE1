@@ -46,4 +46,7 @@ public interface CourseService {
     boolean existsContent(UUID contentId);
 
     CourseContentResponse updateContent(UUID contentId, UpdateCourseContentRequest request);
+
+    /** Xoá một nội dung (bài học / từ vựng / bài tập) khỏi khóa học. */
+    void deleteContent(UUID contentId);
 }

@@ -21,12 +21,14 @@ import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
 import com.sba301.englishcenter.dto.response.MentorResponse;
 import com.sba301.englishcenter.dto.response.RoleResponse;
 import com.sba301.englishcenter.dto.response.UserResponse;
+import com.sba301.englishcenter.dto.response.VocabularyLibraryItemResponse;
 import com.sba301.englishcenter.service.CertificateService;
 import com.sba301.englishcenter.service.CourseService;
 import com.sba301.englishcenter.service.HomeworkSubmissionService;
 import com.sba301.englishcenter.service.MentorService;
 import com.sba301.englishcenter.service.RoleService;
 import com.sba301.englishcenter.service.UserService;
+import com.sba301.englishcenter.service.VocabularyLibraryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -61,6 +63,7 @@ public class AdminController {
     private final CertificateService certificateService;
     private final CourseService courseService;
     private final HomeworkSubmissionService submissionService;
+    private final VocabularyLibraryService vocabularyLibraryService;
 
     // ============================================
     // USERS
@@ -203,6 +206,26 @@ public class AdminController {
             @PathVariable UUID contentId,
             @Valid @RequestBody UpdateCourseContentRequest request) {
         return ApiResponse.success(courseService.updateContent(contentId, request));
+    }
+
+    @DeleteMapping("/course-contents/{contentId}")
+    @Operation(summary = "Delete course content",
+            description = "Delete a course content (lesson, vocabulary, homework)")
+    public ApiResponse<Void> deleteContent(@PathVariable UUID contentId) {
+        courseService.deleteContent(contentId);
+        return ApiResponse.success();
+    }
+
+    // ============================================
+    // VOCABULARY LIBRARY  (Dev 2)
+    // ============================================
+
+    @GetMapping("/vocabulary-library")
+    @Operation(summary = "Get vocabulary library",
+            description = "Retrieve every vocabulary item across all courses. Each item carries the real "
+                    + "course_content id (sourceContentId) so the admin can trace where the words came from.")
+    public ApiResponse<List<VocabularyLibraryItemResponse>> getVocabularyLibrary() {
+        return ApiResponse.success(vocabularyLibraryService.getLibrary());
     }
 
     // ============================================
