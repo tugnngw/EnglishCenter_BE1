@@ -11,7 +11,7 @@
 -- phải do ADMIN tạo.
 --
 -- Tạo ra:
---   1 chứng chỉ "IELTS Academic (Sample)" + 3 phần Listening / Reading / Writing
+--   3 chứng chỉ IELTS (4 phần), TOEIC (Listening / Reading), VSTEP (4 kỹ năng)
 --   1 đề thi thử (trial) ĐÃ PUBLISH  : D3-IELTS-MINI-01   (3 section, 7 câu, đủ 5 loại câu hỏi)
 --   1 khóa học mẫu + 1 đề của khóa học (course, cần enrollment) ĐÃ PUBLISH : D3-COURSE-QUIZ-01
 --
@@ -29,13 +29,27 @@ BEGIN;
 INSERT INTO certificates (certificate_id, created_by_user_id, certificate_name, description)
 VALUES ('d3000000-0000-4000-8000-000000000001',
         (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
-        'IELTS Academic (Sample)', 'Chứng chỉ mẫu cho module Exam (Dev 3)')
-ON CONFLICT (certificate_id) DO NOTHING;
+        'IELTS', 'International English Language Testing System - band 0-9.0'),
+       ('d3000000-0000-4000-8000-000000000002',
+        (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
+        'TOEIC', 'Test of English for International Communication - Listening & Reading 10-990'),
+       ('d3000000-0000-4000-8000-000000000003',
+        (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
+        'VSTEP', 'Khung năng lực ngoại ngữ 6 bậc Việt Nam - thang 0-10, bậc B1/B2/C1')
+ON CONFLICT (certificate_id) DO UPDATE SET certificate_name = EXCLUDED.certificate_name,
+                                           description      = EXCLUDED.description;
 
 INSERT INTO certificate_parts (part_id, certificate_id, part_name, part_description, part_order) VALUES
     ('d3000000-0000-4000-8000-000000000011', 'd3000000-0000-4000-8000-000000000001', 'Listening', 'Nghe hiểu', 1),
     ('d3000000-0000-4000-8000-000000000012', 'd3000000-0000-4000-8000-000000000001', 'Reading',   'Đọc hiểu', 2),
-    ('d3000000-0000-4000-8000-000000000013', 'd3000000-0000-4000-8000-000000000001', 'Writing',   'Viết',     3)
+    ('d3000000-0000-4000-8000-000000000013', 'd3000000-0000-4000-8000-000000000001', 'Writing',   'Viết',     3),
+    ('d3000000-0000-4000-8000-000000000014', 'd3000000-0000-4000-8000-000000000001', 'Speaking',  'Nói',      4),
+    ('d3000000-0000-4000-8000-000000000021', 'd3000000-0000-4000-8000-000000000002', 'Listening', 'Part 1-4: nghe hiểu, 5-495 điểm', 1),
+    ('d3000000-0000-4000-8000-000000000022', 'd3000000-0000-4000-8000-000000000002', 'Reading',   'Part 5-7: đọc hiểu, 5-495 điểm',  2),
+    ('d3000000-0000-4000-8000-000000000031', 'd3000000-0000-4000-8000-000000000003', 'Listening', 'Nghe hiểu, 0-10', 1),
+    ('d3000000-0000-4000-8000-000000000032', 'd3000000-0000-4000-8000-000000000003', 'Reading',   'Đọc hiểu, 0-10',  2),
+    ('d3000000-0000-4000-8000-000000000033', 'd3000000-0000-4000-8000-000000000003', 'Writing',   'Viết, 0-10',      3),
+    ('d3000000-0000-4000-8000-000000000034', 'd3000000-0000-4000-8000-000000000003', 'Speaking',  'Nói, 0-10',       4)
 ON CONFLICT (part_id) DO NOTHING;
 
 -- =====================================================
@@ -142,9 +156,9 @@ ON CONFLICT (id) DO NOTHING;
 INSERT INTO courses (course_id, created_by_user_id, certificate_id, code, title, description, level, price, status)
 VALUES ('d3000000-0000-4000-8000-000000000020',
         (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
-        'd3000000-0000-4000-8000-000000000001', 'D3-SAMPLE-COURSE', 'IELTS Foundation (Sample)',
+        'd3000000-0000-4000-8000-000000000001', 'D3-SAMPLE-COURSE', 'IELTS Foundation',
         'Khóa học mẫu để thử đề thi course-scope', 'BEGINNER', 990000, 'active')
-ON CONFLICT (course_id) DO NOTHING;
+ON CONFLICT (course_id) DO UPDATE SET title = EXCLUDED.title;
 
 INSERT INTO exams (exam_id, exam_scope, created_by_user_id, certificate_id, course_id, exam_code, exam_type,
                    exam_title, description, duration_minutes, passing_score, max_attempts, show_answers,
