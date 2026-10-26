@@ -41,4 +41,10 @@ public interface ExamService {
     ExamDetailResponse publishExam(UUID examId);
 
     ExamDetailResponse unpublishExam(UUID examId);
+
+    /** Lưu trữ đề cũ: ẩn khỏi học viên, giữ nguyên lịch sử thi. */
+    ExamDetailResponse archiveExam(UUID examId);
+
+    /** Khôi phục đề đã lưu trữ về nháp. */
+    ExamDetailResponse restoreExam(UUID examId);
 }

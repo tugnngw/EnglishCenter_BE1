@@ -106,6 +106,18 @@ public class AdminExamController {
         return ApiResponse.success("Đã ẩn đề thi", examService.unpublishExam(examId));
     }
 
+    @PostMapping("/exams/{examId}/archive")
+    @Operation(summary = "Archive exam", description = "Hide an old exam from students but keep its attempt history")
+    public ApiResponse<ExamDetailResponse> archiveExam(@PathVariable UUID examId) {
+        return ApiResponse.success("Đã lưu trữ đề thi", examService.archiveExam(examId));
+    }
+
+    @PostMapping("/exams/{examId}/restore")
+    @Operation(summary = "Restore archived exam", description = "Archived exam back to DRAFT (5024 if not archived)")
+    public ApiResponse<ExamDetailResponse> restoreExam(@PathVariable UUID examId) {
+        return ApiResponse.success("Đã khôi phục đề thi về nháp", examService.restoreExam(examId));
+    }
+
     // ============================================
     // SECTIONS (D3-03)
     // ============================================

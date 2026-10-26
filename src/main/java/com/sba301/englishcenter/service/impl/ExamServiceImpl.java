@@ -233,6 +233,31 @@ public class ExamServiceImpl implements ExamService {
         return buildDetail(exam, ExamMapper.View.ADMIN, null, null);
     }
 
+    @Override
+    @Transactional
+    public ExamDetailResponse archiveExam(UUID examId) {
+        Exam exam = findExam(examId);
+        // Học viên chỉ thấy / bắt đầu được đề published nên đề lưu trữ tự ẩn;
+        // lịch sử và kết quả các lượt đã làm vẫn giữ nguyên, lượt đang làm vẫn được nộp đến khi hết giờ
+        exam.setStatus(ExamStatus.ARCHIVED);
+        exam = examRepository.save(exam);
+        log.info("Đã lưu trữ đề thi {}", examId);
+        return buildDetail(exam, ExamMapper.View.ADMIN, null, null);
+    }
+
+    @Override
+    @Transactional
+    public ExamDetailResponse restoreExam(UUID examId) {
+        Exam exam = findExam(examId);
+        if (exam.getStatus() != ExamStatus.ARCHIVED) {
+            throw new AppException(ErrorCode.EXAM_NOT_ARCHIVED);
+        }
+        exam.setStatus(ExamStatus.DRAFT);
+        exam = examRepository.save(exam);
+        log.info("Đã khôi phục đề thi {} về nháp", examId);
+        return buildDetail(exam, ExamMapper.View.ADMIN, null, null);
+    }
+
     // ============================================
     // HELPERS (package-private cho ExamStructureServiceImpl dùng lại)
     // ============================================

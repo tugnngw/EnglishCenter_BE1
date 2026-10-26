@@ -229,6 +229,21 @@ class ExamFlowIntegrationTest {
 
         assertThat(call(get("/api/v1/attempts/" + attemptId), auth(UUID.randomUUID(), "STUDENT"), null).status())
                 .isEqualTo(404);
+
+        // ---------- Lưu trữ: ẩn khỏi học viên, giữ lịch sử; khôi phục về nháp
+        assertThat((Integer) call(post("/api/v1/admin/exams/" + examId + "/restore"), admin, null).read("$.code"))
+                .isEqualTo(5024);
+        Response archived = call(post("/api/v1/admin/exams/" + examId + "/archive"), admin, null);
+        assertThat((String) archived.read("$.result.exam.status")).as(archived.body()).isEqualTo("archived");
+        assertThat(call(get("/api/v1/exams/" + examId), null, null).status()).isEqualTo(404);
+        assertThat((List<String>) call(get("/api/v1/exams"), null, null).read("$.data[*].examId")).doesNotContain(examId);
+        assertThat((Integer) call(post("/api/v1/exams/" + examId + "/attempts"), student, null).read("$.code"))
+                .isEqualTo(5007);
+        assertThat(call(get("/api/v1/me/exam-attempts/" + attemptId + "/result"), student, null).status()).isEqualTo(200);
+        assertThat((List<String>) call(get("/api/v1/admin/exams?status=archived"), admin, null).read("$.data[*].examId"))
+                .contains(examId);
+        Response restored = call(post("/api/v1/admin/exams/" + examId + "/restore"), admin, null);
+        assertThat((String) restored.read("$.result.exam.status")).isEqualTo("draft");
     }
 
     /** File init dữ liệu mẫu chạy được 2 lần (idempotent); đề course bị chặn khi chưa có enrollment. */

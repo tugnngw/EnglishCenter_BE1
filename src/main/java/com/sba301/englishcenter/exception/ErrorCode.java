@@ -88,6 +88,7 @@ public enum ErrorCode {
     QUESTION_IN_USE(5021, "Câu hỏi đã có học viên trả lời, không thể chỉnh sửa", HttpStatus.CONFLICT),
     INVALID_EXAM_SCOPE(5022, "Phạm vi đề thi không hợp lệ", HttpStatus.BAD_REQUEST),
     EXAM_QUESTION_ALREADY_ADDED(5023, "Câu hỏi đã có trong đề thi", HttpStatus.CONFLICT),
+    EXAM_NOT_ARCHIVED(5024, "Đề thi không ở trạng thái lưu trữ", HttpStatus.CONFLICT),
 
     // === Dev 5 - Mentor Schedule ===
     SCHEDULE_NOT_FOUND(6001, "Không tìm thấy lịch", HttpStatus.NOT_FOUND),
