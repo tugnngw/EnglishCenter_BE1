@@ -1,7 +1,7 @@
 package com.sba301.englishcenter.repository;
 
-import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.AttemptStatus;
+import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.entity.ExamAttempt;
 import jakarta.persistence.LockModeType;
@@ -49,6 +49,13 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, UUID> 
     /** Lịch sử thi của học viên (mới nhất trước). */
     @EntityGraph(attributePaths = {"exam"})
     Page<ExamAttempt> findByStudent_UserId(UUID studentId, Pageable pageable);
+
+    /** Dev 3 - Năng lực: các lượt đã nộp của học viên, mới nhất trước (kèm đề và chứng chỉ). */
+    @EntityGraph(attributePaths = {"exam", "exam.certificate"})
+    @Query("select a from ExamAttempt a where a.student.userId = :studentId and a.status in :statuses "
+            + "order by a.endTime desc")
+    List<ExamAttempt> findFinishedByStudent(@Param("studentId") UUID studentId,
+                                            @Param("statuses") Collection<AttemptStatus> statuses);
 
     @EntityGraph(attributePaths = {"exam"})
     Page<ExamAttempt> findByStudent_UserIdAndExam_ExamId(UUID studentId, UUID examId, Pageable pageable);

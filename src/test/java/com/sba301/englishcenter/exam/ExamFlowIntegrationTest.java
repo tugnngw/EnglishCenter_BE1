@@ -236,6 +236,15 @@ class ExamFlowIntegrationTest {
         assertThat(call(get("/api/v1/attempts/" + attemptId), auth(UUID.randomUUID(), "STUDENT"), null).status())
                 .isEqualTo(404);
 
+        // ---------- Năng lực: chỉ tính đề thi thử loại placement_test
+        assertThat((List<Object>) call(get("/api/v1/me/proficiency"), student, null).read("$.result")).isEmpty();
+        jdbc.update("UPDATE exams SET exam_type = 'placement_test' WHERE exam_id = ?::uuid", examId);
+        Response proficiency = call(get("/api/v1/me/proficiency"), student, null);
+        assertThat(proficiency.status()).as(proficiency.body()).isEqualTo(200);
+        assertThat((List<String>) proficiency.read("$.result[*].examId")).containsExactly(examId);
+        assertThat((String) proficiency.read("$.result[0].status")).isIn("assessed", "pending_grading");
+        jdbc.update("UPDATE exams SET exam_type = 'final' WHERE exam_id = ?::uuid", examId);
+
         // ---------- Lưu trữ: ẩn khỏi học viên, giữ lịch sử; khôi phục về nháp
         assertThat((Integer) call(post("/api/v1/admin/exams/" + examId + "/restore"), admin, null).read("$.code"))
                 .isEqualTo(5024);
