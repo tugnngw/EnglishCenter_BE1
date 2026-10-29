@@ -10,4 +10,4 @@ public record PaymentOrderResponse(UUID orderId, String orderCode, UUID studentI
         BigDecimal amount, String currency, PaymentOrderStatus status, Instant createdAt,
         Instant expiresAt, Instant paidAt, String bankCode, String accountNumber,
         String accountName, String transferContent, String qrUrl,
-        PaymentOrderType orderType, UUID bookingId) {}
+        PaymentOrderType orderType, UUID bookingId, String studentName) {}

@@ -109,7 +109,7 @@ class BookingServiceImplTest {
     private PaymentOrderResponse sessionOrder(UUID orderBookingId, BigDecimal amount) {
         return new PaymentOrderResponse(UUID.randomUUID(), ORDER_CODE, studentId, null, "Buổi kèm 1-1", amount, "VND",
                 PaymentOrderStatus.PENDING, Instant.now(), Instant.now().plusSeconds(900), null, "MBBank", "0000000001",
-                "TEST", ORDER_CODE, "https://vietqr.app/img", PaymentOrderType.MENTOR_SESSION, orderBookingId);
+                "TEST", ORDER_CODE, "https://vietqr.app/img", PaymentOrderType.MENTOR_SESSION, orderBookingId, null);
     }
 
     // Slot của mentor, bắt đầu sau "hoursFromNow" giờ (giờ UTC)

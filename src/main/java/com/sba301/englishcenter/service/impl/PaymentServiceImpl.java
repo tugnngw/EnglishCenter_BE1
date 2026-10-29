@@ -23,6 +23,7 @@ import java.math.BigDecimal;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.*;
+import java.util.HashMap;
 import java.util.UUID;
 
 @Service @RequiredArgsConstructor
@@ -126,12 +127,20 @@ public class PaymentServiceImpl implements PaymentService {
 
     @Override @Transactional(readOnly = true)
     public PageResponse<PaymentOrderResponse> adminOrders(PaymentOrderStatus status, Pageable pageable) {
-        return page((status == null ? orders.findAll(pageable) : orders.findByStatus(status, pageable)).map(this::response));
+        var orderPage = status == null ? orders.findAll(pageable) : orders.findByStatus(status, pageable);
+        var studentNames = new HashMap<UUID, String>();
+        if (!orderPage.isEmpty()) {
+            var studentIds = orderPage.getContent().stream().map(PaymentOrder::getStudentId).distinct().toList();
+            users.findAllById(studentIds).forEach(user -> studentNames.put(user.getUserId(), user.getFullName()));
+        }
+        return page(orderPage.map(order -> response(order, studentNames.get(order.getStudentId()))));
     }
 
     @Override @Transactional(readOnly = true)
     public PaymentOrderResponse adminOrder(UUID id) {
-        return response(orders.findById(id).orElseThrow(() -> new AppException(ErrorCode.PAYMENT_ORDER_NOT_FOUND)));
+        var order = orders.findById(id).orElseThrow(() -> new AppException(ErrorCode.PAYMENT_ORDER_NOT_FOUND));
+        String studentName = users.findById(order.getStudentId()).map(User::getFullName).orElse(null);
+        return response(order, studentName);
     }
 
     @Override @Transactional
@@ -272,6 +281,10 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private PaymentOrderResponse response(PaymentOrder order) {
+        return response(order, null);
+    }
+
+    private PaymentOrderResponse response(PaymentOrder order, String studentName) {
         PaymentOrderStatus status = order.getStatus();
         if (status == PaymentOrderStatus.PENDING && !order.getExpiresAt().isAfter(Instant.now())) status = PaymentOrderStatus.EXPIRED;
         String qr = status == PaymentOrderStatus.PENDING ? "https://vietqr.app/img?acc=" + encode(order.getAccountNumber())
@@ -280,7 +293,7 @@ public class PaymentServiceImpl implements PaymentService {
         return new PaymentOrderResponse(order.getOrderId(), order.getOrderCode(), order.getStudentId(), order.getCourseId(), order.getCourseTitle(),
                 order.getAmount(), "VND", status, order.getCreatedAt(), order.getExpiresAt(), order.getPaidAt(),
                 order.getBankCode(), order.getAccountNumber(), order.getAccountName(), order.getOrderCode(), qr,
-                order.getOrderType(), order.getBookingId());
+                order.getOrderType(), order.getBookingId(), studentName);
     }
 
     private String encode(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }
