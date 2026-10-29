@@ -200,6 +200,12 @@ class ExamFlowIntegrationTest {
                 .isEqualTo(5010);
         assertThat(call(delete("/api/v1/admin/exams/" + examId), admin, null).status()).isEqualTo(409);
 
+        // ---------- Mentor (không phụ trách khóa nào) thấy và mở được bài của đề thi thử
+        UsernamePasswordAuthenticationToken mentor = auth(UUID.randomUUID(), "MENTOR");
+        assertThat((List<String>) call(get("/api/v1/mentor/exam-attempts/pending"), mentor, null)
+                .read("$.data[*].attemptId")).contains(attemptId);
+        assertThat(call(get("/api/v1/mentor/exam-attempts/" + attemptId), mentor, null).status()).isEqualTo(200);
+
         // ---------- Chấm Writing
         assertThat(call(put("/api/v1/mentor/exam-attempts/" + attemptId + "/answers/" + essayId + "/grade"), admin,
                 "{\"score\":7}").status()).isEqualTo(400);
