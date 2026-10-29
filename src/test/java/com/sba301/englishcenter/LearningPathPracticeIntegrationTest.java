@@ -94,8 +94,8 @@ class LearningPathPracticeIntegrationTest {
 
     void aiReturns(String band) {
         var c = new CriterionScoreData(new BigDecimal(band), "ok");
-        when(ai.evaluate(any(), any(), any())).thenReturn(new AiEvaluationResult(new BigDecimal(band), c, c, c, c,
-                "Nhận xét", List.of("Gợi ý 1"), "gemini-test", "{}"));
+        when(ai.evaluate(any(), any(), any(), any())).thenReturn(new AiEvaluationResult(new BigDecimal(band), c, c, c, c,
+                "Nhận xét", List.of("Gợi ý 1"), "gemini-test", "{}", "B2"));
     }
 
     int notifications(UUID user) {
@@ -114,7 +114,7 @@ class LearningPathPracticeIntegrationTest {
 
         assertEquals("7.0", evaluation.getBandScore().toPlainString());
         assertEquals(evaluation.getEvaluationId(), again.getEvaluationId());
-        verify(ai, times(1)).evaluate(any(), any(), any());
+        verify(ai, times(1)).evaluate(any(), any(), any(), any());
         assertEquals(1, notifications(studentId));
 
         // Không chấm / xem được bài của người khác
@@ -140,7 +140,7 @@ class LearningPathPracticeIntegrationTest {
     @Test void aiFailureKeepsAnswerSubmitted() {
         UUID examId = practiceExam();
         UUID answer = submit(studentId, examId, "Essay");
-        when(ai.evaluate(any(), any(), any())).thenThrow(new AppException(ErrorCode.AI_EVALUATION_FAILED));
+        when(ai.evaluate(any(), any(), any(), any())).thenThrow(new AppException(ErrorCode.AI_EVALUATION_FAILED));
 
         assertThrows(AppException.class, () -> practice.evaluate(studentId, answer));
 

@@ -21,9 +21,10 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * Gọi Google Gemini (generateContent) để chấm bài theo 4 tiêu chí khảo thí (TASK-D5-04).
+ * Gọi Google Gemini (generateContent) để chấm bài theo 4 tiêu chí, theo thang của chứng chỉ mục tiêu (TASK-D5-04).
  * Cấu hình qua biến môi trường: GEMINI_API_KEY, GEMINI_MODEL (application.properties: ai.gemini.*).
  * Không log API key; phản hồi gốc được trả về trong rawResponse để lưu đối soát.
  */
@@ -31,27 +32,30 @@ import java.util.Map;
 @Component
 public class GeminiEvaluationClient implements AiEvaluationClient {
 
-    private static final BigDecimal MAX_BAND = new BigDecimal("9.0");
-    private static final BigDecimal TWO = new BigDecimal("2");
+    private static final Set<String> CEFR_LEVELS = Set.of("A1", "A2", "B1", "B2", "C1", "C2");
 
+    /** Prompt theo chứng chỉ: %1$s tên chứng chỉ, %2$s / %3$s / %4$s điểm min / max / bước. */
     static final String SYSTEM_PROMPT = """
-            You are a certified IELTS examiner. Grade the candidate's response strictly against the official IELTS band descriptors.
-            Score exactly 4 criteria, each with a band from 0 to 9 in steps of 0.5:
+            You are a certified %1$s examiner. Grade the candidate's response strictly against the official %1$s scoring criteria.
+            Use the %1$s scale for this skill: from %2$s to %3$s in steps of %4$s.
+            Score exactly 4 criteria on that scale (map each to the closest official %1$s criterion):
             - task_achievement: Task Achievement / Task Response (Writing) or Fluency & task fulfilment (Speaking)
-            - coherence_cohesion: Coherence and Cohesion
-            - lexical_resource: Lexical Resource
+            - coherence_cohesion: Coherence and Cohesion / Organisation
+            - lexical_resource: Vocabulary / Lexical Resource
             - grammatical_accuracy: Grammatical Range and Accuracy
-            band_score is the overall band: the average of the 4 criteria rounded to the nearest 0.5.
+            band_score is the overall score on the same scale, following the official %1$s rules.
+            cefr_level is the CEFR level equivalent to band_score: one of A1, A2, B1, B2, C1, C2.
             Write every comment, the feedback and the suggestions in Vietnamese, concrete and actionable, quoting the candidate's text where useful.
             Reply with ONLY one JSON object, no markdown, in this exact shape:
-            {"band_score": 6.5,
-             "task_achievement": {"band": 6.5, "comment": "..."},
-             "coherence_cohesion": {"band": 6.0, "comment": "..."},
-             "lexical_resource": {"band": 7.0, "comment": "..."},
-             "grammatical_accuracy": {"band": 6.5, "comment": "..."},
+            {"band_score": 0,
+             "cefr_level": "B1",
+             "task_achievement": {"band": 0, "comment": "..."},
+             "coherence_cohesion": {"band": 0, "comment": "..."},
+             "lexical_resource": {"band": 0, "comment": "..."},
+             "grammatical_accuracy": {"band": 0, "comment": "..."},
              "feedback": "...",
              "suggestions": ["...", "..."]}
-            If the response is empty, off-topic or not English, give low bands and explain why.
+            If the response is empty, off-topic or not English, give low scores and explain why.
             """;
 
     private final ObjectMapper json = new ObjectMapper();
@@ -72,15 +76,17 @@ public class GeminiEvaluationClient implements AiEvaluationClient {
     }
 
     @Override
-    public AiEvaluationResult evaluate(PracticeExamType type, String question, String answer) {
+    public AiEvaluationResult evaluate(PracticeExamType type, String question, String answer, ScoringScale scale) {
         if (!StringUtils.hasText(apiKey)) {
             throw new AppException(ErrorCode.AI_NOT_CONFIGURED);
         }
-        String userPrompt = "Skill: IELTS " + type.name() + "\n\nTask / question:\n" + question
+        String systemPrompt = SYSTEM_PROMPT.formatted(scale.certificateName(), scale.minScore().toPlainString(),
+                scale.maxScore().toPlainString(), scale.step().toPlainString());
+        String userPrompt = "Skill: " + scale.certificateName() + " " + type.name() + "\n\nTask / question:\n" + question
                 + "\n\nCandidate response" + (type == PracticeExamType.SPEAKING ? " (transcript of the spoken answer)" : "")
                 + ":\n" + answer;
         Map<String, Object> body = Map.of(
-                "systemInstruction", Map.of("parts", List.of(Map.of("text", SYSTEM_PROMPT))),
+                "systemInstruction", Map.of("parts", List.of(Map.of("text", systemPrompt))),
                 "contents", List.of(Map.of("role", "user", "parts", List.of(Map.of("text", userPrompt)))),
                 // Giữ temperature mặc định (Google khuyến nghị cho dòng Gemini 3); chỉ yêu cầu trả JSON
                 "generationConfig", Map.of("responseMimeType", "application/json"));
@@ -98,10 +104,10 @@ public class GeminiEvaluationClient implements AiEvaluationClient {
             log.warn("Gemini request failed: {}", ex.getMessage());
             throw new AppException(ErrorCode.AI_EVALUATION_FAILED);
         }
-        return parse(raw);
+        return parse(raw, scale);
     }
 
-    AiEvaluationResult parse(String raw) {
+    AiEvaluationResult parse(String raw, ScoringScale scale) {
         try {
             String text = json.readTree(raw).path("candidates").path(0).path("content").path("parts").path(0)
                     .path("text").asText("");
@@ -109,14 +115,15 @@ public class GeminiEvaluationClient implements AiEvaluationClient {
             text = text.trim().replaceAll("^```(?:json)?\\s*", "").replaceAll("\\s*```$", "");
             JsonNode result = json.readTree(text);
 
-            CriterionScoreData ta = criterion(result.path("task_achievement"));
-            CriterionScoreData cc = criterion(result.path("coherence_cohesion"));
-            CriterionScoreData lr = criterion(result.path("lexical_resource"));
-            CriterionScoreData ga = criterion(result.path("grammatical_accuracy"));
-            BigDecimal overall = result.path("band_score").isNumber()
-                    ? normalize(result.path("band_score").decimalValue())
-                    : roundHalf(ta.band().add(cc.band()).add(lr.band()).add(ga.band())
+            CriterionScoreData ta = criterion(result.path("task_achievement"), scale);
+            CriterionScoreData cc = criterion(result.path("coherence_cohesion"), scale);
+            CriterionScoreData lr = criterion(result.path("lexical_resource"), scale);
+            CriterionScoreData ga = criterion(result.path("grammatical_accuracy"), scale);
+            BigDecimal overall = scale.normalize(result.path("band_score").isNumber()
+                    ? result.path("band_score").decimalValue()
+                    : ta.band().add(cc.band()).add(lr.band()).add(ga.band())
                             .divide(new BigDecimal("4"), 4, RoundingMode.HALF_UP));
+            String level = result.path("cefr_level").asText("").trim().toUpperCase();
 
             List<String> suggestions = new ArrayList<>();
             result.path("suggestions").forEach(s -> {
@@ -125,7 +132,7 @@ public class GeminiEvaluationClient implements AiEvaluationClient {
                 }
             });
             return new AiEvaluationResult(overall, ta, cc, lr, ga, result.path("feedback").asText("").trim(),
-                    suggestions, model, raw);
+                    suggestions, model, raw, CEFR_LEVELS.contains(level) ? level : null);
         } catch (AppException ex) {
             throw ex;
         } catch (Exception ex) {
@@ -134,20 +141,11 @@ public class GeminiEvaluationClient implements AiEvaluationClient {
         }
     }
 
-    private CriterionScoreData criterion(JsonNode node) {
+    private CriterionScoreData criterion(JsonNode node, ScoringScale scale) {
         if (!node.path("band").isNumber()) {
             throw new AppException(ErrorCode.AI_EVALUATION_FAILED);
         }
-        return new CriterionScoreData(normalize(node.path("band").decimalValue()), node.path("comment").asText("").trim());
-    }
-
-    // Kẹp trong [0, 9] và làm tròn tới 0.5 gần nhất
-    private BigDecimal normalize(BigDecimal band) {
-        BigDecimal clamped = band.max(BigDecimal.ZERO).min(MAX_BAND);
-        return roundHalf(clamped);
-    }
-
-    private BigDecimal roundHalf(BigDecimal value) {
-        return value.multiply(TWO).setScale(0, RoundingMode.HALF_UP).divide(TWO, 1, RoundingMode.UNNECESSARY);
+        return new CriterionScoreData(scale.normalize(node.path("band").decimalValue()),
+                node.path("comment").asText("").trim());
     }
 }

@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -23,4 +24,10 @@ public class UserResponse {
     private String role;
     private Boolean isActive;
     private LocalDateTime createdAt;
+
+    // Hồ sơ người học (USER / STUDENT); null với MENTOR / ADMIN hoặc khi chưa có
+    private UUID targetCertificateId;
+    private BigDecimal targetScore;
+    private String currentLevel;
+    private BigDecimal currentScore;
 }

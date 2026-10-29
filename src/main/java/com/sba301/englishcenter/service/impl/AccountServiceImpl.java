@@ -49,26 +49,20 @@ public class AccountServiceImpl implements AccountService {
         user.setLastUpdated(LocalDateTime.now());
         userRepository.save(user);
 
-        // Update student profile if user is a student and fields are provided
-        if ("STUDENT".equals(user.getRole().getRoleName())) {
-            StudentProfile profile = studentProfileRepository.findById(userId).orElse(null);
-            if (profile != null) {
-                boolean profileUpdated = false;
-
-                if (request.getTargetCertificateId() != null) {
-                    profile.setTargetCertificateId(request.getTargetCertificateId());
-                    profileUpdated = true;
-                }
-                if (request.getTargetScore() != null) {
-                    profile.setTargetScore(request.getTargetScore());
-                    profileUpdated = true;
-                }
-
-                if (profileUpdated) {
-                    profile.setLastUpdated(LocalDateTime.now());
-                    studentProfileRepository.save(profile);
-                }
+        // Nguyện vọng: Learner (USER) cũng phải nhập trước khi làm Test trình độ,
+        // nên tạo StudentProfile ngay khi chưa có (trước đây chỉ tạo khi lên STUDENT)
+        boolean hasTarget = request.getTargetCertificateId() != null || request.getTargetScore() != null;
+        if (isLearner(user) && hasTarget) {
+            StudentProfile profile = studentProfileRepository.findById(userId)
+                    .orElseGet(() -> StudentProfile.builder().user(user).build());
+            if (request.getTargetCertificateId() != null) {
+                profile.setTargetCertificateId(request.getTargetCertificateId());
             }
+            if (request.getTargetScore() != null) {
+                profile.setTargetScore(request.getTargetScore());
+            }
+            profile.setLastUpdated(LocalDateTime.now());
+            studentProfileRepository.save(profile);
         }
 
         log.info("Profile updated: userId={}", userId);
@@ -76,15 +70,27 @@ public class AccountServiceImpl implements AccountService {
         return toUserResponse(user);
     }
 
+    private boolean isLearner(User user) {
+        String role = user.getRole().getRoleName();
+        return "STUDENT".equals(role) || "USER".equals(role);
+    }
+
     private UserResponse toUserResponse(User user) {
-        return UserResponse.builder()
+        UserResponse.UserResponseBuilder builder = UserResponse.builder()
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .phone(user.getPhone())
                 .role(user.getRole().getRoleName())
                 .isActive(user.getIsActive())
-                .createdAt(user.getCreatedAt())
-                .build();
+                .createdAt(user.getCreatedAt());
+        if (isLearner(user)) {
+            studentProfileRepository.findById(user.getUserId()).ifPresent(p -> builder
+                    .targetCertificateId(p.getTargetCertificateId())
+                    .targetScore(p.getTargetScore())
+                    .currentLevel(p.getCurrentLevel())
+                    .currentScore(p.getCurrentScore()));
+        }
+        return builder.build();
     }
 }

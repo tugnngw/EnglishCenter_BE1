@@ -54,7 +54,7 @@ public class PracticeExamController {
     }
 
     @PostMapping("/{practiceExamId}/submit")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('USER', 'STUDENT')")
     @Operation(summary = "Nộp bài làm", description = "Được nộp nhiều lần; mỗi lần là một bài làm mới trạng thái SUBMITTED")
     public ApiResponse<PracticeAnswerResponse> submit(@PathVariable UUID practiceExamId,
                                                       @Valid @RequestBody SubmitPracticeAnswerRequest request) {
@@ -62,7 +62,7 @@ public class PracticeExamController {
     }
 
     @PostMapping("/answers/{answerId}/ai-evaluate")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('USER', 'STUDENT')")
     @Operation(summary = "Gọi AI chấm bài",
             description = "Mất 10 - 60 giây. Bài đã chấm thì trả lại kết quả cũ. 6027: chưa cấu hình GEMINI_API_KEY; 6028: AI lỗi, thử lại sau")
     public ApiResponse<PracticeEvaluationResponse> evaluate(@PathVariable UUID answerId) {
@@ -80,7 +80,7 @@ public class PracticeExamController {
     }
 
     @GetMapping("/me/answers")
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('USER', 'STUDENT')")
     @Operation(summary = "Lịch sử bài làm của tôi", description = "Mới nhất trước; có evaluationId / bandScore nếu đã chấm")
     public ApiResponse<List<PracticeAnswerResponse>> getMyAnswers() {
         return ApiResponse.success(practiceExamService.getMyAnswers(currentUserId()));

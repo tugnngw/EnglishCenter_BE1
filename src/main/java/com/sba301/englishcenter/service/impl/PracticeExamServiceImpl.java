@@ -13,11 +13,15 @@ import com.sba301.englishcenter.dto.response.PracticeAnswerResponse;
 import com.sba301.englishcenter.dto.response.PracticeEvaluationResponse;
 import com.sba301.englishcenter.dto.response.PracticeExamResponse;
 import com.sba301.englishcenter.entity.PracticeExam;
+import com.sba301.englishcenter.entity.StudentProfile;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.integration.ai.AiEvaluationClient;
 import com.sba301.englishcenter.integration.ai.AiEvaluationResult;
+import com.sba301.englishcenter.integration.ai.ScoringScale;
 import com.sba301.englishcenter.repository.PracticeExamRepository;
+import com.sba301.englishcenter.repository.StudentProfileRepository;
+import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.service.CourseService;
 import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.service.PracticeExamService;
@@ -54,16 +58,24 @@ public class PracticeExamServiceImpl implements PracticeExamService {
     private final CourseService courseService;
     private final NotificationService notificationService;
     private final AiEvaluationClient aiEvaluationClient;
+    private final ScoringScaleResolver scoringScaleResolver;
+    private final StudentProfileRepository studentProfileRepository;
+    private final UserRepository userRepository;
     // AI chấm mất 10 - 60 giây: không giữ transaction / khóa dòng trong lúc chờ AI
     private final TransactionTemplate transactionTemplate;
 
     public PracticeExamServiceImpl(PracticeExamRepository practiceExamRepository, CourseService courseService,
                                    NotificationService notificationService, AiEvaluationClient aiEvaluationClient,
+                                   ScoringScaleResolver scoringScaleResolver,
+                                   StudentProfileRepository studentProfileRepository, UserRepository userRepository,
                                    PlatformTransactionManager transactionManager) {
         this.practiceExamRepository = practiceExamRepository;
         this.courseService = courseService;
         this.notificationService = notificationService;
         this.aiEvaluationClient = aiEvaluationClient;
+        this.scoringScaleResolver = scoringScaleResolver;
+        this.studentProfileRepository = studentProfileRepository;
+        this.userRepository = userRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -158,9 +170,10 @@ public class PracticeExamServiceImpl implements PracticeExamService {
             return toEvaluationResponse(located.exam(), located.answer());
         }
 
-        // 2. Gọi AI ngoài transaction (10 - 60 giây)
+        // 2. Thang điểm theo chứng chỉ mục tiêu của người học, rồi gọi AI ngoài transaction (10 - 60 giây)
+        ScoringScale scale = scoringScaleResolver.resolve(studentId, located.exam().getExamType());
         AiEvaluationResult result = aiEvaluationClient.evaluate(located.exam().getExamType(),
-                located.exam().getTitle() + "\n" + located.exam().getDescription(), located.answer().content());
+                located.exam().getTitle() + "\n" + located.exam().getDescription(), located.answer().content(), scale);
 
         // 3. Ghi kết quả: khóa dòng, đọc lại; nếu request khác đã chấm xong trước thì giữ kết quả đó
         return transactionTemplate.execute(status -> {
@@ -175,14 +188,18 @@ public class PracticeExamServiceImpl implements PracticeExamService {
             PracticeAnswerData evaluated = current.withEvaluation(new PracticeEvaluationData(UUID.randomUUID(),
                     result.bandScore(), result.taskAchievement(), result.coherenceCohesion(), result.lexicalResource(),
                     result.grammaticalAccuracy(), result.feedback(), result.suggestions(), result.model(),
-                    result.rawResponse(), UtcTimeUtil.nowUtc()));
+                    result.rawResponse(), UtcTimeUtil.nowUtc(),
+                    scale.certificateName(), scale.minScore(), scale.maxScore(), result.cefrLevel()));
             answers.set(index, evaluated);
             exam.setAnswers(JsonbMapper.write(answers));
             practiceExamRepository.save(exam);
+            updateCurrentLevel(studentId, result);
 
             // Hub thông báo (TASK-D5-02): AI chấm xong -> báo học viên (đẩy realtime sau commit)
             notificationService.notify(studentId, NotificationType.exam_result, "AI đã chấm xong bài luyện tập",
-                    "Bài \"" + exam.getTitle() + "\" đạt band " + result.bandScore().toPlainString() + ".");
+                    "Bài \"" + exam.getTitle() + "\" đạt " + result.bandScore().toPlainString() + "/"
+                            + scale.maxScore().toPlainString() + " (" + scale.certificateName() + ")"
+                            + (result.cefrLevel() != null ? " — level " + result.cefrLevel() : "") + ".");
             log.info("Practice answer {} evaluated: band {}", answerId, result.bandScore());
             return toEvaluationResponse(exam, evaluated);
         });
@@ -237,6 +254,18 @@ public class PracticeExamServiceImpl implements PracticeExamService {
     }
 
     // ===================== helpers =====================
+
+    /** Lưu trình độ gần nhất vào hồ sơ (tạo hồ sơ nếu Learner chưa có). */
+    private void updateCurrentLevel(UUID studentId, AiEvaluationResult result) {
+        StudentProfile profile = studentProfileRepository.findById(studentId)
+                .orElseGet(() -> StudentProfile.builder().user(userRepository.getReferenceById(studentId)).build());
+        profile.setCurrentScore(result.bandScore());
+        if (result.cefrLevel() != null) {
+            profile.setCurrentLevel(result.cefrLevel());
+        }
+        profile.setLastUpdated(LocalDateTime.now());
+        studentProfileRepository.save(profile);
+    }
 
     private record Located(PracticeExam exam, PracticeAnswerData answer) {
     }
@@ -326,6 +355,10 @@ public class PracticeExamServiceImpl implements PracticeExamService {
                 .examTitle(exam.getTitle())
                 .examType(exam.getExamType().name())
                 .bandScore(e.bandScore())
+                .certificateName(e.certificateName())
+                .minScore(e.minScore())
+                .maxScore(e.maxScore())
+                .cefrLevel(e.cefrLevel())
                 .taskAchievement(e.taskAchievement())
                 .coherenceCohesion(e.coherenceCohesion())
                 .lexicalResource(e.lexicalResource())

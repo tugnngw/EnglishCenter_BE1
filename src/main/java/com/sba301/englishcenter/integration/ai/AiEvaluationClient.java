@@ -12,6 +12,7 @@ public interface AiEvaluationClient {
      * @param type     kỹ năng (WRITING / SPEAKING)
      * @param question đề bài
      * @param answer   bài viết, hoặc văn bản phiên âm bài nói
+     * @param scale    thang điểm theo chứng chỉ mục tiêu của người học
      */
-    AiEvaluationResult evaluate(PracticeExamType type, String question, String answer);
+    AiEvaluationResult evaluate(PracticeExamType type, String question, String answer, ScoringScale scale);
 }

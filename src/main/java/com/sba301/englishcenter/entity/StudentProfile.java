@@ -41,4 +41,12 @@ public class StudentProfile extends BaseEntity {
 
     @Column(name = "target_score", precision = 6, scale = 2)
     private BigDecimal targetScore;
+
+    /** Level CEFR gần nhất do AI chấm (A1 – C2). */
+    @Column(name = "current_level", length = 20)
+    private String currentLevel;
+
+    /** Điểm gần nhất theo thang của chứng chỉ mục tiêu (VD IELTS 6.5, TOEIC 150). */
+    @Column(name = "current_score", precision = 6, scale = 2)
+    private BigDecimal currentScore;
 }

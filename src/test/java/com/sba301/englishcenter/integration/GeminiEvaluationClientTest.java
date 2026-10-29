@@ -5,6 +5,7 @@ import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.integration.ai.AiEvaluationResult;
 import com.sba301.englishcenter.integration.ai.GeminiEvaluationClient;
+import com.sba301.englishcenter.integration.ai.ScoringScale;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -69,7 +70,7 @@ class GeminiEvaluationClientTest {
         String url = start(200, geminiReply(result));
         var client = new GeminiEvaluationClient(url, "test-key", "gemini-test", 5);
 
-        AiEvaluationResult r = client.evaluate(PracticeExamType.WRITING, "Describe the chart", "My essay");
+        AiEvaluationResult r = client.evaluate(PracticeExamType.WRITING, "Describe the chart", "My essay", ScoringScale.IELTS);
 
         assertEquals("test-key", apiKeyHeader.get());
         assertEquals("/v1beta/models/gemini-test:generateContent", path.get());
@@ -87,13 +88,13 @@ class GeminiEvaluationClientTest {
                 + "\"lexical_resource\":{\"band\":7},\"grammatical_accuracy\":{\"band\":6},\"feedback\":\"ok\"}";
         var client = new GeminiEvaluationClient(start(200, geminiReply(result)), "k", "m", 5);
         // (6 + 6.5 + 7 + 6) / 4 = 6.375 -> 6.5
-        assertEquals("6.5", client.evaluate(PracticeExamType.SPEAKING, "q", "a").bandScore().toPlainString());
+        assertEquals("6.5", client.evaluate(PracticeExamType.SPEAKING, "q", "a", ScoringScale.IELTS).bandScore().toPlainString());
     }
 
     @Test
     void noApiKeyMeansNotConfigured() {
         var client = new GeminiEvaluationClient("http://127.0.0.1:1", "", "m", 5);
-        AppException ex = assertThrows(AppException.class, () -> client.evaluate(PracticeExamType.WRITING, "q", "a"));
+        AppException ex = assertThrows(AppException.class, () -> client.evaluate(PracticeExamType.WRITING, "q", "a", ScoringScale.IELTS));
         assertEquals(ErrorCode.AI_NOT_CONFIGURED, ex.getErrorCode());
     }
 
@@ -101,11 +102,11 @@ class GeminiEvaluationClientTest {
     void httpErrorOrGarbageMeansEvaluationFailed() throws Exception {
         var failing = new GeminiEvaluationClient(start(500, "{\"error\":\"boom\"}"), "k", "m", 5);
         assertEquals(ErrorCode.AI_EVALUATION_FAILED,
-                assertThrows(AppException.class, () -> failing.evaluate(PracticeExamType.WRITING, "q", "a")).getErrorCode());
+                assertThrows(AppException.class, () -> failing.evaluate(PracticeExamType.WRITING, "q", "a", ScoringScale.IELTS)).getErrorCode());
         stop();
 
         var garbage = new GeminiEvaluationClient(start(200, geminiReply("not json at all")), "k", "m", 5);
-        AppException ex = assertThrows(AppException.class, () -> garbage.evaluate(PracticeExamType.WRITING, "q", "a"));
+        AppException ex = assertThrows(AppException.class, () -> garbage.evaluate(PracticeExamType.WRITING, "q", "a", ScoringScale.IELTS));
         assertTrue(ex.getErrorCode() == ErrorCode.AI_EVALUATION_FAILED);
     }
 }

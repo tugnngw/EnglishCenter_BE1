@@ -27,7 +27,13 @@ public class PracticeEvaluationResponse {
     private UUID practiceExamId;
     private String examTitle;
     private String examType;
+    /** Điểm tổng theo thang của chứng chỉ (certificateName, minScore – maxScore). */
     private BigDecimal bandScore;
+    private String certificateName;
+    private BigDecimal minScore;
+    private BigDecimal maxScore;
+    /** Level CEFR tương ứng (A1 – C2), null với bài chấm trước đây. */
+    private String cefrLevel;
     private CriterionScoreData taskAchievement;
     private CriterionScoreData coherenceCohesion;
     private CriterionScoreData lexicalResource;
