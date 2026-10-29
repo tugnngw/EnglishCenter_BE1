@@ -277,6 +277,12 @@ class ExamFlowIntegrationTest {
         assertThat(jdbc.queryForObject("SELECT description FROM exams WHERE exam_code = 'D3-COURSE-QUIZ-01'",
                 String.class)).isEqualTo("Bài kiểm tra nhanh Unit 1");
 
+        // Thang điểm từng phần thi (properties) phải ra đúng JSON để FE quy đổi điểm theo chứng chỉ
+        Response ielts = call(get("/api/v1/certificates/d3000000-0000-4000-8000-000000000001"), student, null);
+        assertThat(ielts.status()).as(ielts.body()).isEqualTo(200);
+        assertThat((Object) ielts.read("$.result.parts[0].properties.maxScore")).isEqualTo(9);
+        assertThat(ielts.body()).doesNotContain("nodeType");
+
         String trialExam = "d3000000-0000-4000-8000-000000000100";
         assertThat((Boolean) call(get("/api/v1/exams/" + trialExam), student, null).read("$.result.accessible")).isTrue();
         assertThat((Double) call(post("/api/v1/exams/" + trialExam + "/attempts"), student, null)
