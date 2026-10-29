@@ -7,6 +7,7 @@ import com.sba301.englishcenter.dto.request.UpdateCourseContentRequest;
 import com.sba301.englishcenter.dto.request.UpdateCourseRequest;
 import com.sba301.englishcenter.dto.response.CourseContentResponse;
 import com.sba301.englishcenter.dto.response.CourseResponse;
+import com.sba301.englishcenter.dto.response.CourseVocabularySetResponse;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
@@ -34,8 +35,8 @@ public interface CourseService {
     /** Toàn bộ outline bài học, đã xử lý preview/locked theo quyền học viên. */
     List<CourseContentResponse> getCourseContents(UUID courseId);
 
-    /** Danh sách từ vựng flashcards kèm audio/IPA. */
-    List<CourseContentResponse> getVocabularies(UUID courseId);
+    /** Danh sách bộ từ vựng đã gán cho khóa học (từ kho từ vựng chung). */
+    List<CourseVocabularySetResponse> getVocabularies(UUID courseId);
 
     /** Danh sách bài tập của khóa. */
     List<CourseContentResponse> getHomeworkList(UUID courseId);

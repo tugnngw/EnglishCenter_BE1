@@ -165,6 +165,14 @@ public class AdminController {
         return ApiResponse.success(certificateService.updateCertificate(certificateId, request));
     }
 
+    @DeleteMapping("/certificates/{certificateId}")
+    @Operation(summary = "Delete certificate",
+            description = "Delete a certificate if not used in any course")
+    public ApiResponse<Void> deleteCertificate(@PathVariable UUID certificateId) {
+        certificateService.deleteCertificate(certificateId);
+        return ApiResponse.success();
+    }
+
     // ============================================
     // COURSES  (Dev 2)
     // ============================================
@@ -192,7 +200,10 @@ public class AdminController {
 
     @PostMapping("/courses/{courseId}/contents")
     @Operation(summary = "Add course content",
-            description = "Add a lesson, vocabulary or homework to a course")
+            description = "Add a lesson, vocabulary or homework to a course. "
+                    + "For 'vocabulary', pass vocabularySetIds (ids from the global vocabulary bank) — the sets are "
+                    + "linked into the course via course_vocabulary_sets. "
+                    + "For 'homework', pass examId to link a published exam.")
     public ApiResponse<CourseContentResponse> createContent(
             @PathVariable UUID courseId,
             @Valid @RequestBody CreateCourseContentRequest request) {

@@ -4,6 +4,7 @@ import com.sba301.englishcenter.common.ApiResponse;
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.dto.response.CourseContentResponse;
 import com.sba301.englishcenter.dto.response.CourseResponse;
+import com.sba301.englishcenter.dto.response.CourseVocabularySetResponse;
 import com.sba301.englishcenter.service.CourseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -68,8 +69,8 @@ public class CourseController {
 
     @GetMapping("/{courseId}/vocabularies")
     @Operation(summary = "Get course vocabularies",
-            description = "Retrieve vocabulary flashcards for a course")
-    public ApiResponse<List<CourseContentResponse>> getVocabularies(@PathVariable UUID courseId) {
+            description = "Retrieve the vocabulary sets assigned to a course from the global vocabulary bank")
+    public ApiResponse<List<CourseVocabularySetResponse>> getVocabularies(@PathVariable UUID courseId) {
         return ApiResponse.success(courseService.getVocabularies(courseId));
     }
 

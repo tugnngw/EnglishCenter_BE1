@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -34,9 +35,38 @@ public class CreateCourseContentRequest {
     UUID parentContentId;
 
     /**
+     * Danh sách id bộ từ vựng CHUNG được tham chiếu bởi nội dung 'vocabulary'.
+     * <p>
+     * Chỉ dùng khi {@code contentType = 'vocabulary'}. Nội dung này KHÔNG chứa
+     * từ — nó là con trỏ tới các bộ trong kho từ vựng chung; các bộ sẽ được gán
+     * vào khóa học qua bảng {@code course_vocabulary_sets}.
+     * <p>
+     * Nếu để trống, backend sẽ đọc {@code content_data.setIds}.
+     */
+    List<UUID> vocabularySetIds;
+
+    /**
+     * Id đề thi liên kết cho nội dung 'homework' (bài trắc nghiệm).
+     * <p>
+     * Chỉ dùng khi {@code contentType = 'homework'}. Backend sẽ set FK
+     * {@code course_content.exam_id} và ghi lại {@code examId} vào
+     * {@code content_data}. Nếu để trống, backend đọc {@code content_data.examId}.
+     */
+    UUID examId;
+
+    /**
+     * Kỹ năng (certificate_part) mà bài tập này đo lường.
+     * <p>
+     * Chỉ dùng khi {@code contentType = 'homework'}. Cho phép null (bài tập
+     * chưa gắn kỹ năng). Backend set FK {@code course_content.certificate_part_id}.
+     */
+    UUID certificatePartId;
+
+    /**
      * JSON string lưu vào cột content_data (JSONB).
      * Ví dụ lesson: {"isPreview":true,"videoUrl":"...","durationMinutes":30}
-     * Ví dụ vocabulary: {"word":"academic","phonetic":"...","audioUrl":"...","meaning":"..."}
+     * Ví dụ vocabulary: {"setIds":["...uuid..."]}
+     * Ví dụ homework: {"submissionType":"multiple_choice","examId":"...uuid..."}
      */
     String contentData;
 }

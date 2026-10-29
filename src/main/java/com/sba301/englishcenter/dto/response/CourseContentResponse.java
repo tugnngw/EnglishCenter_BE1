@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -50,4 +51,30 @@ public class CourseContentResponse {
 
     /** Chỉ được trả về khi bài học không bị khóa. */
     String videoUrl;
+
+    /**
+     * Id đề thi liên kết (nội dung 'homework' bài trắc nghiệm).
+     * <p>
+     * Lấy từ FK {@code course_content.exam_id}. Có thể {@code null} nếu bài tập
+     * không phải trắc nghiệm, hoặc đề thi đã bị xoá (FK là ON DELETE SET NULL).
+     */
+    UUID examId;
+
+    /** Tên đề thi liên kết — tiện cho UI hiển thị mà không cần gọi thêm API. */
+    String examTitle;
+
+    /**
+     * Id kỹ năng (certificate_part) mà bài tập này đo lường.
+     * <p>
+     * Thêm ở V8. {@code null} = bài tập chưa gắn kỹ năng chứng chỉ.
+     */
+    UUID certificatePartId;
+
+    /**
+     * Danh sách id bộ từ vựng CHUNG được tham chiếu bởi nội dung 'vocabulary'.
+     * <p>
+     * Chỉ có giá trị khi {@code contentType = 'vocabulary'}; các bộ này đã được
+     * gán vào khóa học qua {@code course_vocabulary_sets}.
+     */
+    List<String> vocabularySetIds;
 }

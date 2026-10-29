@@ -14,4 +14,6 @@ public interface CourseRepository extends JpaRepository<Course, UUID>, JpaSpecif
     Optional<Course> findByCode(String code);
 
     boolean existsByCode(String code);
+
+    boolean existsByCertificate_CertificateId(UUID certificateId);
 }

@@ -16,4 +16,6 @@ public interface CertificateService {
     CertificateResponse createCertificate(CreateCertificateRequest request);
 
     CertificateResponse updateCertificate(UUID certificateId, UpdateCertificateRequest request);
+
+    void deleteCertificate(UUID certificateId);
 }

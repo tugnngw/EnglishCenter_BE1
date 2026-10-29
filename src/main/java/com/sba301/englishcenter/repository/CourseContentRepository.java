@@ -22,4 +22,12 @@ public interface CourseContentRepository extends JpaRepository<CourseContent, UU
 
     /** Nội dung con trực tiếp (dùng để xoá dọn cây khi xoá một nội dung cha). */
     List<CourseContent> findByParentContent_ContentId(UUID parentContentId);
+
+    /**
+     * Bài tập (homework) trỏ tới một đề thi.
+     * <p>
+     * Dùng cho luồng bài trắc nghiệm: từ lượt thi tìm ngược về bài tập để tạo
+     * bản ghi {@code homework_submissions}.
+     */
+    List<CourseContent> findByContentTypeAndExam_ExamId(ContentType contentType, UUID examId);
 }

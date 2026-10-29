@@ -81,4 +81,26 @@ public final class JsonUtil {
             throw new IllegalArgumentException("Dữ liệu JSON không hợp lệ");
         }
     }
+
+    /**
+     * Serialize một giá trị bất kỳ thành chuỗi JSON.
+     * <p>
+     * Dùng khi service cần TỰ DỰNG nội dung {@code content_data} (vd: danh sách
+     * {@code setIds} của nội dung 'vocabulary') mà không muốn ghép chuỗi thủ công.
+     *
+     * @param value giá trị cần serialize (null → "null")
+     * @return chuỗi JSON
+     */
+    public static String toJson(Object value) {
+        try {
+            return MAPPER.writeValueAsString(value);
+        } catch (Exception ex) {
+            throw new IllegalArgumentException("Không serialize được JSON", ex);
+        }
+    }
+
+    /** ObjectMapper dùng chung — cho phép service tạo {@code ObjectNode}. */
+    public static ObjectMapper mapper() {
+        return MAPPER;
+    }
 }

@@ -64,4 +64,47 @@ public class HomeworkSubmission {
 
     @Column(name = "graded_date")
     private LocalDateTime gradedDate;
+
+    /* =====================================================
+     * Cột bổ sung (V8) — nullable, không ảnh hưởng dữ liệu cũ.
+     * ===================================================== */
+
+    /**
+     * TRUE khi đạt điểm; {@code null} = chưa chấm (đang chờ mentor).
+     * <p>
+     * Tính khi chấm (trắc nghiệm: lúc nộp bài). Mentor sửa điểm → tính lại.
+     */
+    @Column(name = "passed")
+    private Boolean passed;
+
+    /**
+     * Snapshot hình thức nộp tại lúc nộp: {@code text} | {@code file} | {@code multiple_choice}.
+     * <p>
+     * Lưu riêng (không đọc lại từ {@code course_content.content_data}) để lịch sử
+     * bài nộp không đổi hành vi khi admin sửa bài tập về sau.
+     */
+    @Column(name = "submission_type", length = 20)
+    private String submissionType;
+
+    /** Lượt thi thật của bài trắc nghiệm. NULL với bài tự luận / nộp file. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "exam_attempt_id")
+    private ExamAttempt examAttempt;
+
+    /** public_id của file trên Cloudinary — KHÔNG lưu URL (URL có thời hạn). */
+    @Column(name = "file_public_id", length = 255)
+    private String filePublicId;
+
+    /** image | raw | video — quyết định cách dựng URL truy cập. */
+    @Column(name = "file_resource_type", length = 20)
+    private String fileResourceType;
+
+    @Column(name = "file_format", length = 20)
+    private String fileFormat;
+
+    @Column(name = "file_bytes")
+    private Long fileBytes;
+
+    @Column(name = "file_original_name", length = 255)
+    private String fileOriginalName;
 }

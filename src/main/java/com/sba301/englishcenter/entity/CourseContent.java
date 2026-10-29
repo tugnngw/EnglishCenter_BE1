@@ -75,6 +75,30 @@ public class CourseContent extends BaseEntity {
     private Integer contentOrder = 0;
 
     /**
+     * Đề thi liên kết cho nội dung loại {@code homework} (bài trắc nghiệm).
+     * <p>
+     * Được thêm ở V7. Trước đó {@code examId} chỉ nằm trong JSONB
+     * {@code content_data} nên không có ràng buộc FK — không truy vấn ngược được
+     * (vd: "đề nào đang được dùng làm bài tập?").
+     * <p>
+     * {@code ON DELETE SET NULL} → xoá đề thi không làm hỏng nội dung khóa học.
+     * Với nội dung KHÔNG phải homework, trường này luôn {@code null}.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "exam_id")
+    private Exam exam;
+
+    /**
+     * Kỹ năng (certificate_part) mà bài tập này đo lường.
+     * <p>
+     * Thêm ở V8. Cho phép {@code null} (bài tập chưa gắn kỹ năng).
+     * {@code ON DELETE SET NULL} → xoá kỹ năng không làm hỏng bài tập.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "certificate_part_id")
+    private CertificatePart certificatePart;
+
+    /**
      * Cột JSONB {@code content_data} của PostgreSQL.
      * Chứa các thuộc tính riêng: isPreview, videoUrl, durationMinutes, word, phonetic, audioUrl...
      * <p>

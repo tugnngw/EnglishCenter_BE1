@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -21,4 +23,7 @@ public class UpdateCertificateRequest {
     String certificateName;
 
     String description;
+
+    /** Danh sách các kỹ năng/phần cập nhật cho chứng chỉ. */
+    List<CreateCertificateRequest.PartRequest> parts;
 }
