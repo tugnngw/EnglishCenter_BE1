@@ -73,7 +73,8 @@ public class ExamAttemptController {
 
     @GetMapping("/me/proficiency")
     @Operation(summary = "My proficiency", description = "Current level per certificate from the latest submitted "
-            + "placement test (trial exam of type placement_test): IELTS band / TOEIC score / VSTEP level. "
+            + "placement test (trial exam of type placement_test): percentage per section with its certificate part. "
+            + "The client converts it with the certificate's scoring config (Certificates page). "
             + "status = pending_grading while Writing/Speaking waits for a mentor")
     public ApiResponse<List<ProficiencyResponse>> getMyProficiency(@RequestParam(required = false) UUID certificateId) {
         return ApiResponse.success("Lấy năng lực thành công", proficiencyService.getMyProficiency(certificateId));

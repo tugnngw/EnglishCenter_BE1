@@ -243,6 +243,8 @@ class ExamFlowIntegrationTest {
         assertThat(proficiency.status()).as(proficiency.body()).isEqualTo(200);
         assertThat((List<String>) proficiency.read("$.result[*].examId")).containsExactly(examId);
         assertThat((String) proficiency.read("$.result[0].status")).isIn("assessed", "pending_grading");
+        assertThat((List<Object>) proficiency.read("$.result[0].sections")).isNotEmpty();
+        assertThat((Object) proficiency.read("$.result[0].sections[0].percentage")).isNotNull();
         jdbc.update("UPDATE exams SET exam_type = 'final' WHERE exam_id = ?::uuid", examId);
 
         // ---------- Lưu trữ: ẩn khỏi học viên, giữ lịch sử; khôi phục về nháp

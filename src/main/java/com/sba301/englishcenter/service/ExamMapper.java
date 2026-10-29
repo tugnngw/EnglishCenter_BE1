@@ -415,6 +415,8 @@ public class ExamMapper {
         private SectionScoreResponse toResponse() {
             return SectionScoreResponse.builder()
                     .sectionId(section.getSectionId())
+                    .certificatePartId(section.getCertificatePart() != null
+                            ? section.getCertificatePart().getPartId() : null)
                     .sectionType(section.getSectionType())
                     .title(section.getTitle())
                     .questionCount(count)

@@ -5,6 +5,7 @@ import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.dto.response.AttemptResultResponse;
 import com.sba301.englishcenter.dto.response.ProficiencyResponse;
+import com.sba301.englishcenter.dto.response.SectionScoreResponse;
 import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamAnswer;
 import com.sba301.englishcenter.entity.ExamAttempt;
@@ -16,7 +17,6 @@ import com.sba301.englishcenter.repository.ExamAttemptRepository;
 import com.sba301.englishcenter.repository.ExamQuestionRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.service.ExamMapper;
-import com.sba301.englishcenter.service.ProficiencyCalculator;
 import com.sba301.englishcenter.service.ProficiencyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -45,7 +44,6 @@ public class ProficiencyServiceImpl implements ProficiencyService {
     private final ExamQuestionRepository examQuestionRepository;
     private final ExamAnswerRepository answerRepository;
     private final ExamMapper examMapper;
-    private final ProficiencyCalculator calculator;
 
     @Override
     @Transactional(readOnly = true)
@@ -89,25 +87,19 @@ public class ProficiencyServiceImpl implements ProficiencyService {
                 .collect(Collectors.toMap(a -> a.getQuestion().getQuestionId(), Function.identity(), (a, b) -> a));
         // staff = true: luôn có điểm từng phần để tính năng lực (kể cả đề ẩn điểm với học viên)
         AttemptResultResponse detail = examMapper.toResult(attempt, questions, answers, true);
-
-        String certificateName = exam.getCertificate().getCertificateName();
-        ProficiencyCalculator.Assessment a = calculator.assess(certificateName, detail.getSectionScores(),
-                detail.getAttempt().getPercentage());
+        List<SectionScoreResponse> sections = detail.getSectionScores() == null ? List.of() : detail.getSectionScores();
+        boolean pending = Boolean.TRUE.equals(detail.getAttempt().getPendingManualGrading());
 
         return ProficiencyResponse.builder()
                 .certificateId(exam.getCertificate().getCertificateId())
-                .certificateName(certificateName)
-                .scale(a.scale().name().toLowerCase(Locale.ROOT))
+                .certificateName(exam.getCertificate().getCertificateName())
                 .examId(exam.getExamId())
                 .examTitle(exam.getExamTitle())
                 .attemptId(attempt.getAttemptId())
                 .takenAt(attempt.getEndTime())
-                .status(a.pendingGrading() ? "pending_grading" : "assessed")
-                .overall(a.overall())
-                .overallMax(a.overallMax())
-                .level(a.level())
-                .cefr(a.cefr())
-                .skills(a.skills())
+                .status(pending ? "pending_grading" : "assessed")
+                .percentage(detail.getAttempt().getPercentage())
+                .sections(sections)
                 .build();
     }
 }

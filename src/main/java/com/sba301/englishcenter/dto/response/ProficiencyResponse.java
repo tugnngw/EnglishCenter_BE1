@@ -15,8 +15,9 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Dev 3 - Năng lực hiện tại của học viên theo một chứng chỉ, lấy từ bài kiểm tra năng lực
- * (đề thi thử loại placement_test) gần nhất đã nộp. Dev 5 dùng để xếp lộ trình / lịch học.
+ * Dev 3 - Kết quả bài kiểm tra năng lực (đề thi thử loại placement_test) gần nhất đã nộp của học viên
+ * theo một chứng chỉ. Chỉ trả tỷ lệ % từng phần: thang điểm (band, tổng điểm, CEFR...) do admin cấu hình
+ * ở trang Chứng chỉ (Dev 2: scoring trong description + properties của certificate_parts), FE quy đổi.
  */
 @Getter
 @Setter
@@ -29,8 +30,6 @@ public class ProficiencyResponse {
 
     UUID certificateId;
     String certificateName;
-    /** ielts | toeic | vstep | raw */
-    String scale;
 
     UUID examId;
     String examTitle;
@@ -40,31 +39,9 @@ public class ProficiencyResponse {
     /** assessed: đã có điểm đầy đủ; pending_grading: còn phần Writing / Speaking chờ mentor chấm */
     String status;
 
-    /** IELTS / VSTEP: điểm chung; TOEIC: tổng L + R; null khi còn chờ chấm */
-    BigDecimal overall;
-    BigDecimal overallMax;
-    /** Mô tả năng lực: "Competent user", "Bậc 4 (B2)", "TOEIC 650" */
-    String level;
-    /** Trình độ CEFR tương ứng (nếu quy đổi được) */
-    String cefr;
+    /** Tỷ lệ % cả bài */
+    BigDecimal percentage;
 
-    List<SkillScore> skills;
-
-    @Getter
-    @Setter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    @FieldDefaults(level = AccessLevel.PRIVATE)
-    @JsonInclude(JsonInclude.Include.NON_NULL)
-    public static class SkillScore {
-        /** LISTENING | READING | WRITING | SPEAKING | OTHER */
-        String skill;
-        String title;
-        BigDecimal score;
-        BigDecimal maxScore;
-        BigDecimal percentage;
-        Boolean pendingManualGrading;
-        String cefr;
-    }
+    /** Điểm từng phần thi của đề, kèm phần thi của chứng chỉ (nếu section có gắn) */
+    List<SectionScoreResponse> sections;
 }
