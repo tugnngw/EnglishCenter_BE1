@@ -37,6 +37,8 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, UUID> 
 
     long countByExam_ExamIdAndStudent_UserId(UUID examId, UUID studentId);
 
+    long countByStudent_UserId(UUID studentId);
+
     boolean existsByExam_ExamId(UUID examId);
 
     // Dev 5 (Learning Path): học viên đã có lượt thi đạt của đề này chưa

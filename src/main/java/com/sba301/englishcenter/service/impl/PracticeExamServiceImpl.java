@@ -5,6 +5,7 @@ import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.NotificationType;
 import com.sba301.englishcenter.common.enums.PracticeAnswerStatus;
 import com.sba301.englishcenter.common.enums.PracticeExamType;
+import com.sba301.englishcenter.common.enums.RoleName;
 import com.sba301.englishcenter.dto.practice.PracticeAnswerData;
 import com.sba301.englishcenter.dto.practice.PracticeEvaluationData;
 import com.sba301.englishcenter.dto.request.PracticeExamRequest;
@@ -12,13 +13,17 @@ import com.sba301.englishcenter.dto.request.SubmitPracticeAnswerRequest;
 import com.sba301.englishcenter.dto.response.PracticeAnswerResponse;
 import com.sba301.englishcenter.dto.response.PracticeEvaluationResponse;
 import com.sba301.englishcenter.dto.response.PracticeExamResponse;
+import com.sba301.englishcenter.entity.Certificate;
 import com.sba301.englishcenter.entity.PracticeExam;
 import com.sba301.englishcenter.entity.StudentProfile;
+import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.integration.ai.AiEvaluationClient;
 import com.sba301.englishcenter.integration.ai.AiEvaluationResult;
 import com.sba301.englishcenter.integration.ai.ScoringScale;
+import com.sba301.englishcenter.repository.CertificateRepository;
+import com.sba301.englishcenter.repository.ExamAttemptRepository;
 import com.sba301.englishcenter.repository.PracticeExamRepository;
 import com.sba301.englishcenter.repository.StudentProfileRepository;
 import com.sba301.englishcenter.repository.UserRepository;
@@ -61,6 +66,8 @@ public class PracticeExamServiceImpl implements PracticeExamService {
     private final ScoringScaleResolver scoringScaleResolver;
     private final StudentProfileRepository studentProfileRepository;
     private final UserRepository userRepository;
+    private final ExamAttemptRepository examAttemptRepository;
+    private final CertificateRepository certificateRepository;
     // AI chấm mất 10 - 60 giây: không giữ transaction / khóa dòng trong lúc chờ AI
     private final TransactionTemplate transactionTemplate;
 
@@ -68,6 +75,8 @@ public class PracticeExamServiceImpl implements PracticeExamService {
                                    NotificationService notificationService, AiEvaluationClient aiEvaluationClient,
                                    ScoringScaleResolver scoringScaleResolver,
                                    StudentProfileRepository studentProfileRepository, UserRepository userRepository,
+                                   ExamAttemptRepository examAttemptRepository,
+                                   CertificateRepository certificateRepository,
                                    PlatformTransactionManager transactionManager) {
         this.practiceExamRepository = practiceExamRepository;
         this.courseService = courseService;
@@ -76,6 +85,8 @@ public class PracticeExamServiceImpl implements PracticeExamService {
         this.scoringScaleResolver = scoringScaleResolver;
         this.studentProfileRepository = studentProfileRepository;
         this.userRepository = userRepository;
+        this.examAttemptRepository = examAttemptRepository;
+        this.certificateRepository = certificateRepository;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -84,7 +95,13 @@ public class PracticeExamServiceImpl implements PracticeExamService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<PracticeExamResponse> getPracticeExams(PracticeExamType type, String keyword, Pageable pageable) {
-        Page<PracticeExam> page = practiceExamRepository.findAll(PracticeExamSpecification.filter(type, keyword),
+        return getPracticeExams(type, keyword, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<PracticeExamResponse> getPracticeExams(PracticeExamType type, String keyword, UUID certificateId, Pageable pageable) {
+        Page<PracticeExam> page = practiceExamRepository.findAll(PracticeExamSpecification.filter(type, keyword, certificateId),
                 PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), NEWEST_FIRST));
         return PageResponse.<PracticeExamResponse>builder()
                 .currentPage(page.getNumber())
@@ -105,9 +122,11 @@ public class PracticeExamServiceImpl implements PracticeExamService {
     @Transactional
     public PracticeExamResponse create(UUID adminId, PracticeExamRequest request) {
         validateCourse(request.getCourseId());
+        Certificate certificate = resolveCertificate(request.getCertificateId());
         PracticeExam exam = practiceExamRepository.save(PracticeExam.builder()
                 .createdByUserId(adminId)
                 .courseId(request.getCourseId())
+                .certificate(certificate)
                 .bankName(trimToNull(request.getBankName()))
                 .title(request.getTitle().trim())
                 .description(request.getDescription().trim())
@@ -123,7 +142,9 @@ public class PracticeExamServiceImpl implements PracticeExamService {
     public PracticeExamResponse update(UUID practiceExamId, PracticeExamRequest request) {
         PracticeExam exam = findExam(practiceExamId);
         validateCourse(request.getCourseId());
+        Certificate certificate = resolveCertificate(request.getCertificateId());
         exam.setCourseId(request.getCourseId());
+        exam.setCertificate(certificate);
         exam.setBankName(trimToNull(request.getBankName()));
         exam.setTitle(request.getTitle().trim());
         exam.setDescription(request.getDescription().trim());
@@ -150,6 +171,18 @@ public class PracticeExamServiceImpl implements PracticeExamService {
         // Khóa dòng: answers là mảng JSONB, 2 lần nộp cùng lúc không được ghi đè nhau
         PracticeExam exam = practiceExamRepository.findWithLockByPracticeExamId(practiceExamId)
                 .orElseThrow(() -> new AppException(ErrorCode.PRACTICE_EXAM_NOT_FOUND));
+
+        // Kiểm tra giới hạn 3 lượt test miễn phí cho USER (Learner)
+        User user = userRepository.findById(studentId)
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+        if (user.getRole() != null && RoleName.USER.name().equalsIgnoreCase(user.getRole().getRoleName())) {
+            long practiceAttempts = countPracticeAttempts(studentId);
+            long examAttempts = examAttemptRepository.countByStudent_UserId(studentId);
+            if (practiceAttempts + examAttempts >= 3) {
+                throw new AppException(ErrorCode.PRACTICE_ATTEMPT_LIMIT);
+            }
+        }
+
         String content = request.getContent().trim();
         PracticeAnswerData answer = new PracticeAnswerData(UUID.randomUUID(), studentId, content, countWords(content),
                 PracticeAnswerStatus.SUBMITTED, UtcTimeUtil.nowUtc(), null);
@@ -255,6 +288,14 @@ public class PracticeExamServiceImpl implements PracticeExamService {
 
     // ===================== helpers =====================
 
+    private long countPracticeAttempts(UUID studentId) {
+        String filter = JsonbMapper.write(List.of(Map.of("studentId", studentId.toString())));
+        return practiceExamRepository.findByAnswersContaining(filter).stream()
+                .flatMap(exam -> answersOf(exam).stream())
+                .filter(a -> studentId.equals(a.studentId()))
+                .count();
+    }
+
     /** Lưu trình độ gần nhất vào hồ sơ (tạo hồ sơ nếu Learner chưa có). */
     private void updateCurrentLevel(UUID studentId, AiEvaluationResult result) {
         StudentProfile profile = studentProfileRepository.findById(studentId)
@@ -317,6 +358,14 @@ public class PracticeExamServiceImpl implements PracticeExamService {
         return value == null || value.isBlank() ? null : value.trim();
     }
 
+    private Certificate resolveCertificate(UUID certificateId) {
+        if (certificateId == null) {
+            return null;
+        }
+        return certificateRepository.findById(certificateId)
+                .orElseThrow(() -> new AppException(ErrorCode.CERTIFICATE_NOT_FOUND));
+    }
+
     private PracticeExamResponse toExamResponse(PracticeExam exam) {
         return PracticeExamResponse.builder()
                 .practiceExamId(exam.getPracticeExamId())
@@ -325,6 +374,8 @@ public class PracticeExamServiceImpl implements PracticeExamService {
                 .examType(exam.getExamType().name())
                 .bankName(exam.getBankName())
                 .courseId(exam.getCourseId())
+                .certificateId(exam.getCertificate() != null ? exam.getCertificate().getCertificateId() : null)
+                .certificateName(exam.getCertificate() != null ? exam.getCertificate().getName() : null)
                 .createdByUserId(exam.getCreatedByUserId())
                 .createdAt(UtcTimeUtil.fromServerTime(exam.getCreatedAt()))
                 .lastUpdated(UtcTimeUtil.fromServerTime(exam.getLastUpdated()))

@@ -1,6 +1,7 @@
 package com.sba301.englishcenter.service.impl;
 
 import com.sba301.englishcenter.common.enums.AuthTokenType;
+import com.sba301.englishcenter.common.enums.NotificationType;
 import com.sba301.englishcenter.common.enums.RoleName;
 import com.sba301.englishcenter.dto.request.ChangePasswordRequest;
 import com.sba301.englishcenter.dto.request.LoginRequest;
@@ -22,6 +23,7 @@ import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.security.UserPrincipal;
 import com.sba301.englishcenter.security.jwt.JwtTokenProvider;
 import com.sba301.englishcenter.service.AuthService;
+import com.sba301.englishcenter.service.NotificationService;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -49,6 +51,7 @@ public class AuthServiceImpl implements AuthService {
     private final AuthTokenRepository authTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional
@@ -73,6 +76,14 @@ public class AuthServiceImpl implements AuthService {
         User savedUser = userRepository.save(user);
 
         // StudentProfile is not created yet; it will be created when user purchases a course and upgrades to STUDENT.
+
+        try {
+            notificationService.notify(savedUser.getId(), NotificationType.general,
+                    "Làm test trình độ miễn phí",
+                    "Chào mừng bạn! Hãy làm bài test trình độ miễn phí để xác định lộ trình học phù hợp.");
+        } catch (Exception e) {
+            log.warn("Failed to send welcome notification to user {}: {}", savedUser.getId(), e.getMessage());
+        }
 
         return toUserResponse(savedUser);
     }

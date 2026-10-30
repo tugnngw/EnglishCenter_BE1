@@ -2,7 +2,11 @@ package com.sba301.englishcenter.service.impl;
 
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.AttemptStatus;
+import com.sba301.englishcenter.common.enums.ExamScope;
+import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.common.enums.QuestionType;
+import com.sba301.englishcenter.common.enums.RoleName;
+import com.sba301.englishcenter.dto.practice.PracticeAnswerData;
 import com.sba301.englishcenter.dto.request.AnswerItemRequest;
 import com.sba301.englishcenter.dto.request.SaveAnswersRequest;
 import com.sba301.englishcenter.dto.request.SubmitAttemptRequest;
@@ -10,26 +14,34 @@ import com.sba301.englishcenter.dto.response.AttemptDetailResponse;
 import com.sba301.englishcenter.dto.response.AttemptResultResponse;
 import com.sba301.englishcenter.dto.response.AttemptSummaryResponse;
 import com.sba301.englishcenter.dto.response.ExamDetailResponse;
+import com.sba301.englishcenter.entity.Certificate;
 import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamAnswer;
 import com.sba301.englishcenter.entity.ExamAttempt;
 import com.sba301.englishcenter.entity.ExamQuestion;
 import com.sba301.englishcenter.entity.Question;
 import com.sba301.englishcenter.entity.QuestionOption;
+import com.sba301.englishcenter.entity.StudentProfile;
+import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
-import com.sba301.englishcenter.service.ExamMapper;
+import com.sba301.englishcenter.repository.CertificateRepository;
 import com.sba301.englishcenter.repository.ExamAnswerRepository;
 import com.sba301.englishcenter.repository.ExamAttemptRepository;
 import com.sba301.englishcenter.repository.ExamQuestionRepository;
 import com.sba301.englishcenter.repository.ExamRepository;
 import com.sba301.englishcenter.repository.ExamSectionRepository;
+import com.sba301.englishcenter.repository.PracticeExamRepository;
+import com.sba301.englishcenter.repository.StudentProfileRepository;
 import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.service.ExamAccessPolicy;
 import com.sba301.englishcenter.service.ExamAttemptService;
 import com.sba301.englishcenter.service.ExamGrader;
+import com.sba301.englishcenter.service.ExamMapper;
 import com.sba301.englishcenter.util.JsonUtil;
+import com.sba301.englishcenter.util.JsonbMapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.PersistenceContext;
@@ -89,6 +101,9 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     private final ExamAccessPolicy accessPolicy;
     private final ExamGrader grader;
     private final ExamMapper examMapper;
+    private final StudentProfileRepository studentProfileRepository;
+    private final PracticeExamRepository practiceExamRepository;
+    private final CertificateRepository certificateRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -126,6 +141,18 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
         long used = attemptRepository.countByExam_ExamIdAndStudent_UserId(examId, studentId);
         if (exam.getMaxAttempts() != null && exam.getMaxAttempts() > 0 && used >= exam.getMaxAttempts()) {
             throw new AppException(ErrorCode.EXAM_MAX_ATTEMPTS_REACHED);
+        }
+
+        // TASK-DEV1 T5 / T7: Giới hạn 3 lượt test miễn phí cho Learner (USER role)
+        User user = userRepository.findById(studentId).orElse(null);
+        boolean isLearner = (user != null && user.getRole() != null && RoleName.USER.name().equalsIgnoreCase(user.getRole().getRoleName()))
+                || SecurityUtils.getCurrentUserPrincipal().map(p -> RoleName.USER.name().equalsIgnoreCase(p.getRoleName())).orElse(false);
+        if (isLearner) {
+            long practiceAttempts = countPracticeAttempts(studentId);
+            long examAttempts = attemptRepository.countByStudent_UserId(studentId);
+            if (practiceAttempts + examAttempts >= 3) {
+                throw new AppException(ErrorCode.PRACTICE_ATTEMPT_LIMIT);
+            }
         }
 
         List<ExamQuestion> examQuestions = examQuestionRepository.findDetailedByExamId(examId);
@@ -315,6 +342,11 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
                 .setScale(2, RoundingMode.HALF_UP));
         examRepository.save(exam);
 
+        // TASK-DEV1 T7: Cập nhật current_level và current_score vào StudentProfile khi hoàn thành placement_test / trial
+        if (!summary.pendingManual() && (exam.getExamType() == ExamType.placement_test || exam.getExamScope() == ExamScope.trial)) {
+            updateStudentProfileOnAttemptCompletion(attempt, summary);
+        }
+
         if (auto) {
             log.info("Lượt thi {} hết giờ, hệ thống tự nộp", attempt.getAttemptId());
         }
@@ -455,5 +487,73 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     private static UUID currentUserId() {
         return SecurityUtils.getCurrentUserId()
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+    }
+
+    private long countPracticeAttempts(UUID studentId) {
+        try {
+            String filter = JsonbMapper.write(List.of(Map.of("studentId", studentId.toString())));
+            return practiceExamRepository.findByAnswersContaining(filter).stream()
+                    .flatMap(exam -> JsonbMapper.readList(exam.getAnswers(), new TypeReference<List<PracticeAnswerData>>() {}).stream())
+                    .filter(a -> studentId.equals(a.studentId()))
+                    .count();
+        } catch (Exception ex) {
+            log.warn("Error counting practice attempts for student {}: {}", studentId, ex.getMessage());
+            return 0;
+        }
+    }
+
+    private void updateStudentProfileOnAttemptCompletion(ExamAttempt attempt, ExamGrader.Summary summary) {
+        if (summary.score() == null || summary.maxScore() == null || summary.maxScore().compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+        UUID studentId = attempt.getStudent().getUserId();
+        StudentProfile profile = studentProfileRepository.findById(studentId)
+                .orElseGet(() -> StudentProfile.builder().user(userRepository.getReferenceById(studentId)).build());
+
+        BigDecimal percentage = summary.percentage();
+        if (percentage == null) {
+            percentage = summary.score().multiply(BigDecimal.valueOf(100))
+                    .divide(summary.maxScore(), 2, RoundingMode.HALF_UP);
+        }
+
+        String cefr = mapPercentageToCefr(percentage);
+        profile.setCurrentLevel(cefr);
+
+        BigDecimal convertedScore = calculateScaledScore(profile.getTargetCertificateId(), percentage, summary.score());
+        profile.setCurrentScore(convertedScore);
+        profile.setLastUpdated(LocalDateTime.now());
+        studentProfileRepository.save(profile);
+        log.info("Updated student profile for {}: level={}, score={}", studentId, cefr, convertedScore);
+    }
+
+    private String mapPercentageToCefr(BigDecimal percentage) {
+        double p = percentage.doubleValue();
+        if (p >= 90.0) return "C2";
+        if (p >= 80.0) return "C1";
+        if (p >= 65.0) return "B2";
+        if (p >= 50.0) return "B1";
+        if (p >= 35.0) return "A2";
+        return "A1";
+    }
+
+    private BigDecimal calculateScaledScore(UUID targetCertId, BigDecimal percentage, BigDecimal rawScore) {
+        if (targetCertId != null) {
+            Optional<Certificate> certOpt = certificateRepository.findById(targetCertId);
+            if (certOpt.isPresent()) {
+                String certName = certOpt.get().getCertificateName().toUpperCase();
+                double p = percentage.doubleValue() / 100.0;
+                if (certName.contains("IELTS")) {
+                    double ielts = Math.round(p * 9.0 * 2.0) / 2.0;
+                    return BigDecimal.valueOf(Math.max(1.0, Math.min(9.0, ielts))).setScale(1, RoundingMode.HALF_UP);
+                } else if (certName.contains("TOEIC")) {
+                    long toeic = Math.round((p * 980.0 + 10.0) / 5.0) * 5;
+                    return BigDecimal.valueOf(Math.max(10, Math.min(990, toeic))).setScale(0, RoundingMode.HALF_UP);
+                } else if (certName.contains("VSTEP")) {
+                    double vstep = Math.round(p * 10.0 * 2.0) / 2.0;
+                    return BigDecimal.valueOf(Math.max(0.0, Math.min(10.0, vstep))).setScale(1, RoundingMode.HALF_UP);
+                }
+            }
+        }
+        return rawScore.setScale(1, RoundingMode.HALF_UP);
     }
 }

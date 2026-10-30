@@ -161,6 +161,7 @@ public enum ErrorCode {
     PRACTICE_EXAM_HAS_ANSWERS(6026, "Đề luyện tập đã có bài làm, không thể xóa", HttpStatus.CONFLICT),
     AI_NOT_CONFIGURED(6027, "Chưa cấu hình dịch vụ AI chấm bài", HttpStatus.SERVICE_UNAVAILABLE),
     AI_EVALUATION_FAILED(6028, "AI chấm bài thất bại, vui lòng thử lại sau", HttpStatus.BAD_GATEWAY),
+    PRACTICE_ATTEMPT_LIMIT(6029, "Bạn đã dùng hết 3 lượt test miễn phí", HttpStatus.FORBIDDEN),
     ;
 
     private final int code;

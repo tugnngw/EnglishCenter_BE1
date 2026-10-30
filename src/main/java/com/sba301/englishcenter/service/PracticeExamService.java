@@ -20,6 +20,8 @@ public interface PracticeExamService {
 
     PageResponse<PracticeExamResponse> getPracticeExams(PracticeExamType type, String keyword, Pageable pageable);
 
+    PageResponse<PracticeExamResponse> getPracticeExams(PracticeExamType type, String keyword, UUID certificateId, Pageable pageable);
+
     PracticeExamResponse getPracticeExam(UUID practiceExamId);
 
     PracticeExamResponse create(UUID adminId, PracticeExamRequest request);

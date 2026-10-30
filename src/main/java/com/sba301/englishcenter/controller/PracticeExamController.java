@@ -39,12 +39,13 @@ public class PracticeExamController {
     private final PracticeExamService practiceExamService;
 
     @GetMapping
-    @Operation(summary = "Danh sách đề luyện tập (public)", description = "Lọc theo type WRITING / SPEAKING và keyword (tiêu đề, đề bài)")
+    @Operation(summary = "Danh sách đề luyện tập (public)", description = "Lọc theo type WRITING / SPEAKING, keyword (tiêu đề, đề bài) và certificateId")
     public PageResponse<PracticeExamResponse> getPracticeExams(
             @RequestParam(required = false) PracticeExamType type,
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) UUID certificateId,
             @PageableDefault(size = 10) Pageable pageable) {
-        return practiceExamService.getPracticeExams(type, keyword, pageable);
+        return practiceExamService.getPracticeExams(type, keyword, certificateId, pageable);
     }
 
     @GetMapping("/{practiceExamId}")

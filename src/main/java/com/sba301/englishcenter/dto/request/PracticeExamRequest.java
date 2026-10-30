@@ -33,4 +33,7 @@ public class PracticeExamRequest {
 
     // Khóa học liên quan (không bắt buộc)
     private UUID courseId;
+
+    // Chứng chỉ liên quan (IELTS, TOEIC, VSTEP...)
+    private UUID certificateId;
 }

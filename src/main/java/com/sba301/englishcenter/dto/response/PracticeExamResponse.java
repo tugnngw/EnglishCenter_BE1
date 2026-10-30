@@ -25,6 +25,8 @@ public class PracticeExamResponse {
     private String examType;
     private String bankName;
     private UUID courseId;
+    private UUID certificateId;
+    private String certificateName;
     private UUID createdByUserId;
     private Instant createdAt;
     private Instant lastUpdated;
