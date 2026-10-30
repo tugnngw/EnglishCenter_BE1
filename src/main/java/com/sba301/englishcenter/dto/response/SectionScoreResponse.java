@@ -25,6 +25,8 @@ import java.util.UUID;
 public class SectionScoreResponse {
 
     UUID sectionId;
+    /** Phần thi của chứng chỉ (Dev 2) mà section này thuộc về; FE lấy thang điểm của phần thi từ đây */
+    UUID certificatePartId;
     String sectionType;
     String title;
     Integer questionCount;

@@ -2,6 +2,7 @@ package com.sba301.englishcenter.service.impl;
 
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.AttemptStatus;
+import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.common.enums.RoleName;
 import com.sba301.englishcenter.dto.request.GradeAnswerRequest;
@@ -63,7 +64,7 @@ public class ExamGradingServiceImpl implements ExamGradingService {
         Page<ExamAttempt> page = isAdmin(grader)
                 ? attemptRepository.findPendingManualGrading(GRADABLE_STATUSES, QuestionType.ESSAY, pageable)
                 : attemptRepository.findPendingManualGradingForMentor(GRADABLE_STATUSES, QuestionType.ESSAY,
-                        grader.getUserId(), pageable);
+                        ExamScope.TRIAL, grader.getUserId(), pageable);
 
         return PageResponse.<AttemptSummaryResponse>builder()
                 .currentPage(page.getNumber())
@@ -139,13 +140,17 @@ public class ExamGradingServiceImpl implements ExamGradingService {
         return examMapper.toResult(attempt, examQuestions, answers, true);
     }
 
-    /** Admin chấm mọi đề; mentor chỉ chấm đề của khóa học mình phụ trách. */
+    /** Admin chấm mọi đề; mentor chấm mọi đề thi thử (trial) và đề của khóa học mình phụ trách. */
     private void assertCanGrade(Exam exam) {
         UserPrincipal principal = currentPrincipal();
         if (isAdmin(principal)) {
             return;
         }
-        boolean isCourseMentor = RoleName.MENTOR.name().equals(principal.getRoleName())
+        boolean isMentor = RoleName.MENTOR.name().equals(principal.getRoleName());
+        if (isMentor && exam.getExamScope() == ExamScope.TRIAL) {
+            return;
+        }
+        boolean isCourseMentor = isMentor
                 && exam.getCourse() != null
                 && exam.getCourse().getMentor() != null
                 && exam.getCourse().getMentor().getUserId().equals(principal.getUserId());

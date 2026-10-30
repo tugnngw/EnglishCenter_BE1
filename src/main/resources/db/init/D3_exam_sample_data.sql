@@ -29,28 +29,29 @@ BEGIN;
 INSERT INTO certificates (certificate_id, created_by_user_id, certificate_name, description)
 VALUES ('d3000000-0000-4000-8000-000000000001',
         (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
-        'IELTS', 'International English Language Testing System - band 0-9.0'),
+        'IELTS', '{"description":"International English Language Testing System - band 0-9.0","scoring":{"scaleType":"AVERAGE","minScore":0,"maxScore":9,"step":0.5,"unit":"Band","preset":"IELTS","roundingRule":"IELTS"}}'),
        ('d3000000-0000-4000-8000-000000000002',
         (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
-        'TOEIC', 'Test of English for International Communication - Listening & Reading 10-990'),
+        'TOEIC', '{"description":"Test of English for International Communication - Listening & Reading 10-990","scoring":{"scaleType":"SUM","minScore":10,"maxScore":990,"step":5,"unit":"Điểm","preset":"TOEIC_LR"}}'),
        ('d3000000-0000-4000-8000-000000000003',
         (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
-        'VSTEP', 'Khung năng lực ngoại ngữ 6 bậc Việt Nam - thang 0-10, bậc B1/B2/C1')
+        'VSTEP', '{"description":"Khung năng lực ngoại ngữ 6 bậc Việt Nam - thang 0-10, bậc B1/B2/C1","scoring":{"scaleType":"AVERAGE","minScore":0,"maxScore":10,"step":0.5,"unit":"Điểm","preset":"VSTEP","roundingRule":"VSTEP"}}')
 ON CONFLICT (certificate_id) DO UPDATE SET certificate_name = EXCLUDED.certificate_name,
                                            description      = EXCLUDED.description;
 
-INSERT INTO certificate_parts (part_id, certificate_id, part_name, part_description, part_order) VALUES
-    ('d3000000-0000-4000-8000-000000000011', 'd3000000-0000-4000-8000-000000000001', 'Listening', 'Nghe hiểu', 1),
-    ('d3000000-0000-4000-8000-000000000012', 'd3000000-0000-4000-8000-000000000001', 'Reading',   'Đọc hiểu', 2),
-    ('d3000000-0000-4000-8000-000000000013', 'd3000000-0000-4000-8000-000000000001', 'Writing',   'Viết',     3),
-    ('d3000000-0000-4000-8000-000000000014', 'd3000000-0000-4000-8000-000000000001', 'Speaking',  'Nói',      4),
-    ('d3000000-0000-4000-8000-000000000021', 'd3000000-0000-4000-8000-000000000002', 'Listening', 'Part 1-4: nghe hiểu, 5-495 điểm', 1),
-    ('d3000000-0000-4000-8000-000000000022', 'd3000000-0000-4000-8000-000000000002', 'Reading',   'Part 5-7: đọc hiểu, 5-495 điểm',  2),
-    ('d3000000-0000-4000-8000-000000000031', 'd3000000-0000-4000-8000-000000000003', 'Listening', 'Nghe hiểu, 0-10', 1),
-    ('d3000000-0000-4000-8000-000000000032', 'd3000000-0000-4000-8000-000000000003', 'Reading',   'Đọc hiểu, 0-10',  2),
-    ('d3000000-0000-4000-8000-000000000033', 'd3000000-0000-4000-8000-000000000003', 'Writing',   'Viết, 0-10',      3),
-    ('d3000000-0000-4000-8000-000000000034', 'd3000000-0000-4000-8000-000000000003', 'Speaking',  'Nói, 0-10',       4)
-ON CONFLICT (part_id) DO NOTHING;
+-- properties theo định dạng trang Chứng chỉ (Dev 2): thang điểm của từng phần thi
+INSERT INTO certificate_parts (part_id, certificate_id, part_name, part_description, part_order, properties) VALUES
+    ('d3000000-0000-4000-8000-000000000011', 'd3000000-0000-4000-8000-000000000001', 'Listening', 'Nghe hiểu', 1, '{"minScore":0,"maxScore":9,"step":0.5,"scaleType":"AVERAGE","unit":"Band"}'),
+    ('d3000000-0000-4000-8000-000000000012', 'd3000000-0000-4000-8000-000000000001', 'Reading',   'Đọc hiểu', 2, '{"minScore":0,"maxScore":9,"step":0.5,"scaleType":"AVERAGE","unit":"Band"}'),
+    ('d3000000-0000-4000-8000-000000000013', 'd3000000-0000-4000-8000-000000000001', 'Writing',   'Viết',     3, '{"minScore":0,"maxScore":9,"step":0.5,"scaleType":"AVERAGE","unit":"Band"}'),
+    ('d3000000-0000-4000-8000-000000000014', 'd3000000-0000-4000-8000-000000000001', 'Speaking',  'Nói',      4, '{"minScore":0,"maxScore":9,"step":0.5,"scaleType":"AVERAGE","unit":"Band"}'),
+    ('d3000000-0000-4000-8000-000000000021', 'd3000000-0000-4000-8000-000000000002', 'Listening', 'Part 1-4: nghe hiểu, 5-495 điểm', 1, '{"minScore":5,"maxScore":495,"step":5,"scaleType":"SUM","unit":"Điểm"}'),
+    ('d3000000-0000-4000-8000-000000000022', 'd3000000-0000-4000-8000-000000000002', 'Reading',   'Part 5-7: đọc hiểu, 5-495 điểm',  2, '{"minScore":5,"maxScore":495,"step":5,"scaleType":"SUM","unit":"Điểm"}'),
+    ('d3000000-0000-4000-8000-000000000031', 'd3000000-0000-4000-8000-000000000003', 'Listening', 'Nghe hiểu, 0-10', 1, '{"minScore":0,"maxScore":10,"step":0.5,"scaleType":"AVERAGE","unit":"Điểm"}'),
+    ('d3000000-0000-4000-8000-000000000032', 'd3000000-0000-4000-8000-000000000003', 'Reading',   'Đọc hiểu, 0-10',  2, '{"minScore":0,"maxScore":10,"step":0.5,"scaleType":"AVERAGE","unit":"Điểm"}'),
+    ('d3000000-0000-4000-8000-000000000033', 'd3000000-0000-4000-8000-000000000003', 'Writing',   'Viết, 0-10',      3, '{"minScore":0,"maxScore":10,"step":0.5,"scaleType":"AVERAGE","unit":"Điểm"}'),
+    ('d3000000-0000-4000-8000-000000000034', 'd3000000-0000-4000-8000-000000000003', 'Speaking',  'Nói, 0-10',       4, '{"minScore":0,"maxScore":10,"step":0.5,"scaleType":"AVERAGE","unit":"Điểm"}')
+ON CONFLICT (part_id) DO UPDATE SET properties = EXCLUDED.properties;
 
 -- =====================================================
 -- ĐỀ 1: THI THỬ (trial) - miễn phí, ai đăng nhập cũng làm được

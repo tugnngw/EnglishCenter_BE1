@@ -200,6 +200,12 @@ class ExamFlowIntegrationTest {
                 .isEqualTo(5010);
         assertThat(call(delete("/api/v1/admin/exams/" + examId), admin, null).status()).isEqualTo(409);
 
+        // ---------- Mentor (không phụ trách khóa nào) thấy và mở được bài của đề thi thử
+        UsernamePasswordAuthenticationToken mentor = auth(UUID.randomUUID(), "MENTOR");
+        assertThat((List<String>) call(get("/api/v1/mentor/exam-attempts/pending"), mentor, null)
+                .read("$.data[*].attemptId")).contains(attemptId);
+        assertThat(call(get("/api/v1/mentor/exam-attempts/" + attemptId), mentor, null).status()).isEqualTo(200);
+
         // ---------- Chấm Writing
         assertThat(call(put("/api/v1/mentor/exam-attempts/" + attemptId + "/answers/" + essayId + "/grade"), admin,
                 "{\"score\":7}").status()).isEqualTo(400);
@@ -230,6 +236,17 @@ class ExamFlowIntegrationTest {
         assertThat(call(get("/api/v1/attempts/" + attemptId), auth(UUID.randomUUID(), "STUDENT"), null).status())
                 .isEqualTo(404);
 
+        // ---------- Năng lực: chỉ tính đề thi thử loại placement_test
+        assertThat((List<Object>) call(get("/api/v1/me/proficiency"), student, null).read("$.result")).isEmpty();
+        jdbc.update("UPDATE exams SET exam_type = 'placement_test' WHERE exam_id = ?::uuid", examId);
+        Response proficiency = call(get("/api/v1/me/proficiency"), student, null);
+        assertThat(proficiency.status()).as(proficiency.body()).isEqualTo(200);
+        assertThat((List<String>) proficiency.read("$.result[*].examId")).containsExactly(examId);
+        assertThat((String) proficiency.read("$.result[0].status")).isIn("assessed", "pending_grading");
+        assertThat((List<Object>) proficiency.read("$.result[0].sections")).isNotEmpty();
+        assertThat((Object) proficiency.read("$.result[0].sections[0].percentage")).isNotNull();
+        jdbc.update("UPDATE exams SET exam_type = 'final' WHERE exam_id = ?::uuid", examId);
+
         // ---------- Lưu trữ: ẩn khỏi học viên, giữ lịch sử; khôi phục về nháp
         assertThat((Integer) call(post("/api/v1/admin/exams/" + examId + "/restore"), admin, null).read("$.code"))
                 .isEqualTo(5024);
@@ -259,6 +276,12 @@ class ExamFlowIntegrationTest {
         }
         assertThat(jdbc.queryForObject("SELECT description FROM exams WHERE exam_code = 'D3-COURSE-QUIZ-01'",
                 String.class)).isEqualTo("Bài kiểm tra nhanh Unit 1");
+
+        // Thang điểm từng phần thi (properties) phải ra đúng JSON để FE quy đổi điểm theo chứng chỉ
+        Response ielts = call(get("/api/v1/certificates/d3000000-0000-4000-8000-000000000001"), student, null);
+        assertThat(ielts.status()).as(ielts.body()).isEqualTo(200);
+        assertThat((Object) ielts.read("$.result.parts[0].properties.maxScore")).isEqualTo(9);
+        assertThat(ielts.body()).doesNotContain("nodeType");
 
         String trialExam = "d3000000-0000-4000-8000-000000000100";
         assertThat((Boolean) call(get("/api/v1/exams/" + trialExam), student, null).read("$.result.accessible")).isTrue();

@@ -33,7 +33,7 @@ public class MentorExamGradingController {
 
     @GetMapping("/pending")
     @Operation(summary = "Pending grading queue", description = "Attempts with ungraded essay answers, oldest first. "
-            + "Mentors only see exams of courses they teach")
+            + "Mentors see every trial exam plus exams of courses they teach")
     public PageResponse<AttemptSummaryResponse> getPending(@PageableDefault(size = 20) Pageable pageable) {
         return gradingService.getPendingAttempts(pageable);
     }

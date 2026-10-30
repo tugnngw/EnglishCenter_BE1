@@ -100,6 +100,8 @@ public enum ErrorCode {
     INVALID_EXAM_SCOPE(5022, "Phạm vi đề thi không hợp lệ", HttpStatus.BAD_REQUEST),
     EXAM_QUESTION_ALREADY_ADDED(5023, "Câu hỏi đã có trong đề thi", HttpStatus.CONFLICT),
     EXAM_NOT_ARCHIVED(5024, "Đề thi không ở trạng thái lưu trữ", HttpStatus.CONFLICT),
+    AI_IMPORT_INVALID_FILE(5025, "File không hợp lệ: chỉ nhận PDF (tối đa 15MB) hoặc nội dung văn bản", HttpStatus.BAD_REQUEST),
+    AI_IMPORT_FAILED(5026, "AI không đọc được file, vui lòng thử lại", HttpStatus.BAD_GATEWAY),
     // === Dev 2.5 - Bài tập: nộp bài, chấm điểm, lưu trữ file ===
     HOMEWORK_SUBMISSION_TYPE_MISMATCH(3020,
             "Hình thức nộp không khớp với bài tập",

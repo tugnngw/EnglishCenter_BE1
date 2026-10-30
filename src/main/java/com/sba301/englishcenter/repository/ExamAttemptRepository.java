@@ -1,6 +1,7 @@
 package com.sba301.englishcenter.repository;
 
 import com.sba301.englishcenter.common.enums.AttemptStatus;
+import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.entity.ExamAttempt;
 import jakarta.persistence.LockModeType;
@@ -49,6 +50,13 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, UUID> 
     @EntityGraph(attributePaths = {"exam"})
     Page<ExamAttempt> findByStudent_UserId(UUID studentId, Pageable pageable);
 
+    /** Dev 3 - Năng lực: các lượt đã nộp của học viên, mới nhất trước (kèm đề và chứng chỉ). */
+    @EntityGraph(attributePaths = {"exam", "exam.certificate"})
+    @Query("select a from ExamAttempt a where a.student.userId = :studentId and a.status in :statuses "
+            + "order by a.endTime desc")
+    List<ExamAttempt> findFinishedByStudent(@Param("studentId") UUID studentId,
+                                            @Param("statuses") Collection<AttemptStatus> statuses);
+
     @EntityGraph(attributePaths = {"exam"})
     Page<ExamAttempt> findByStudent_UserIdAndExam_ExamId(UUID studentId, UUID examId, Pageable pageable);
 
@@ -84,21 +92,25 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, UUID> 
                                                @Param("essay") QuestionType essay,
                                                Pageable pageable);
 
-    /** Như trên nhưng chỉ các đề thuộc khóa học do mentor này phụ trách. */
+    /**
+     * Hàng đợi của mentor: mọi đề thi thử (trial — không thuộc khóa nào, mentor nào cũng chấm để đánh giá năng lực)
+     * cộng các đề khóa học do mentor này phụ trách. Dùng left join vì đề trial không có khóa học.
+     */
     @EntityGraph(attributePaths = {"exam", "student"})
-    @Query(value = "select a from ExamAttempt a where a.status in :statuses "
-            + "and a.exam.course.mentor.userId = :mentorId and exists ("
+    @Query(value = "select a from ExamAttempt a left join a.exam e left join e.course c left join c.mentor m "
+            + "where a.status in :statuses and (e.examScope = :trial or m.userId = :mentorId) and exists ("
             + "select 1 from ExamAnswer d where d.attempt = a and d.question.questionType = "
             + ":essay "
             + "and d.manualScore is null and d.answerText is not null and length(trim(d.answerText)) > 0) "
             + "order by a.endTime asc",
-            countQuery = "select count(a) from ExamAttempt a where a.status in :statuses "
-                    + "and a.exam.course.mentor.userId = :mentorId and exists ("
+            countQuery = "select count(a) from ExamAttempt a left join a.exam e left join e.course c left join c.mentor m "
+                    + "where a.status in :statuses and (e.examScope = :trial or m.userId = :mentorId) and exists ("
                     + "select 1 from ExamAnswer d where d.attempt = a and d.question.questionType = "
                     + ":essay "
                     + "and d.manualScore is null and d.answerText is not null and length(trim(d.answerText)) > 0)")
     Page<ExamAttempt> findPendingManualGradingForMentor(@Param("statuses") Collection<AttemptStatus> statuses,
                                                         @Param("essay") QuestionType essay,
+                                                        @Param("trial") ExamScope trial,
                                                         @Param("mentorId") UUID mentorId,
                                                         Pageable pageable);
 }
