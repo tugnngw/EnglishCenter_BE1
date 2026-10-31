@@ -78,11 +78,11 @@ public class AuthServiceImpl implements AuthService {
         // StudentProfile is not created yet; it will be created when user purchases a course and upgrades to STUDENT.
 
         try {
-            notificationService.notify(savedUser.getId(), NotificationType.general,
+            notificationService.notify(savedUser.getUserId(), NotificationType.general,
                     "Làm test trình độ miễn phí",
                     "Chào mừng bạn! Hãy làm bài test trình độ miễn phí để xác định lộ trình học phù hợp.");
         } catch (Exception e) {
-            log.warn("Failed to send welcome notification to user {}: {}", savedUser.getId(), e.getMessage());
+            log.warn("Failed to send welcome notification to user {}: {}", savedUser.getUserId(), e.getMessage());
         }
 
         return toUserResponse(savedUser);

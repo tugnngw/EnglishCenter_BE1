@@ -81,7 +81,7 @@ public class RecommendationServiceImpl implements RecommendationService {
     }
 
     private List<CourseResponse> findRecommendedCourses(UUID targetCertId, BigDecimal currentScore, BigDecimal targetScore) {
-        Specification<Course> spec = (root, query, cb) -> cb.equal(root.get("status"), CourseStatus.PUBLISHED);
+        Specification<Course> spec = (root, query, cb) -> cb.equal(root.get("status"), CourseStatus.active);
         List<Course> published = courseRepository.findAll(spec);
 
         if (published.isEmpty()) {

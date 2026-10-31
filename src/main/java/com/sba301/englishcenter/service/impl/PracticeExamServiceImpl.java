@@ -375,7 +375,7 @@ public class PracticeExamServiceImpl implements PracticeExamService {
                 .bankName(exam.getBankName())
                 .courseId(exam.getCourseId())
                 .certificateId(exam.getCertificate() != null ? exam.getCertificate().getCertificateId() : null)
-                .certificateName(exam.getCertificate() != null ? exam.getCertificate().getName() : null)
+                .certificateName(exam.getCertificate() != null ? exam.getCertificate().getCertificateName() : null)
                 .createdByUserId(exam.getCreatedByUserId())
                 .createdAt(UtcTimeUtil.fromServerTime(exam.getCreatedAt()))
                 .lastUpdated(UtcTimeUtil.fromServerTime(exam.getLastUpdated()))
