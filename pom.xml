@@ -48,6 +48,12 @@
             <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
 
+        <!-- Email: GUI kich hoat tai khoan (user dang ky) + mat khau tam (admin tao mentor) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
         <!-- Dev 5: WebSocket STOMP cho thông báo realtime (/ws-connect, /topic/notifications/{userId}) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

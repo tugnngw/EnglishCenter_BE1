@@ -1,11 +1,15 @@
 package com.sba301.englishcenter.controller;
 
 import com.sba301.englishcenter.common.ApiResponse;
+import com.sba301.englishcenter.dto.request.ActivateAccountRequest;
+import com.sba301.englishcenter.dto.request.ActivationTokenRequest;
 import com.sba301.englishcenter.dto.request.ChangePasswordRequest;
 import com.sba301.englishcenter.dto.request.LoginRequest;
 import com.sba301.englishcenter.dto.request.LogoutRequest;
 import com.sba301.englishcenter.dto.request.RefreshTokenRequest;
 import com.sba301.englishcenter.dto.request.RegisterRequest;
+import com.sba301.englishcenter.dto.request.ResendActivationRequest;
+import com.sba301.englishcenter.dto.response.ActivationInfoResponse;
 import com.sba301.englishcenter.dto.response.AuthResponse;
 import com.sba301.englishcenter.dto.response.UserResponse;
 import com.sba301.englishcenter.exception.AppException;
@@ -35,12 +39,41 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    @Operation(summary = "Register a new student account")
+    @Operation(summary = "Register a new account by email",
+            description = "Creates an INACTIVE account and sends an email with an activation link. " +
+                    "The user sets the password on the /set-password page (POST /api/v1/auth/activate). " +
+                    "Re-registering with an unactivated email re-sends a fresh link.")
     public ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
         UserResponse user = authService.register(request);
         return ResponseEntity
                 .status(HttpStatus.CREATED)
-                .body(ApiResponse.success("User registered successfully", user));
+                .body(ApiResponse.success("Vui lòng kiểm tra email để kích hoạt tài khoản", user));
+    }
+
+    @PostMapping("/verify-activation-token")
+    @Operation(summary = "Verify an account activation token",
+            description = "Public endpoint used by the /set-password page: checks the token from the email link " +
+                    "and returns the account's email and full name for display.")
+    public ApiResponse<ActivationInfoResponse> verifyActivationToken(
+            @Valid @RequestBody ActivationTokenRequest request) {
+        return ApiResponse.success(authService.verifyActivationToken(request.getToken()));
+    }
+
+    @PostMapping("/activate")
+    @Operation(summary = "Complete activation by setting the password",
+            description = "Consumes the activation token from the email link, sets the user's password, " +
+                    "activates the account and returns a JWT session (auto-login on the web).")
+    public ApiResponse<AuthResponse> activate(@Valid @RequestBody ActivateAccountRequest request) {
+        return ApiResponse.success("Kích hoạt tài khoản thành công", authService.activateAccount(request));
+    }
+
+    @PostMapping("/resend-activation")
+    @Operation(summary = "Resend the activation email",
+            description = "Sends a new activation link for an unactivated account. " +
+                    "Always returns OK — does not reveal whether the email exists.")
+    public ApiResponse<Void> resendActivation(@Valid @RequestBody ResendActivationRequest request) {
+        authService.resendActivation(request.getEmail());
+        return ApiResponse.success("Nếu email chưa được kích hoạt, link mới đã được gửi", null);
     }
 
     @PostMapping("/login")

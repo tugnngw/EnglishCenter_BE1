@@ -31,6 +31,9 @@ public enum ErrorCode {
     // === Refresh Token ===
     REFRESH_TOKEN_REVOKED(1012, "Refresh token has been revoked", HttpStatus.UNAUTHORIZED),
 
+    // === Email activation ===
+    ACTIVATION_TOKEN_INVALID(1013, "Đường link kích hoạt không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
+
     // === Auth - Password Management ===
     NEW_PASSWORD_SAME_AS_OLD(2015, "Mật khẩu mới không được trùng mật khẩu cũ", HttpStatus.BAD_REQUEST),
 

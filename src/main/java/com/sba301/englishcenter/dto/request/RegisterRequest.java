@@ -3,13 +3,17 @@ package com.sba301.englishcenter.dto.request;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+/**
+ * Yêu cầu đăng ký tài khoản (không còn mật khẩu ở bước này).
+ * User khai email + họ tên (+ SĐT); hệ thống gửi email chứa link kích hoạt,
+ * người dùng đặt mật khẩu tại trang /set-password trên web.
+ */
 @Getter
 @Setter
 @Builder
@@ -20,10 +24,6 @@ public class RegisterRequest {
     @NotBlank(message = "Email is required")
     @Email(message = "Invalid email format")
     private String email;
-
-    @NotBlank(message = "Password is required")
-    @Size(min = 6, message = "Password must be at least 6 characters")
-    private String password;
 
     @NotBlank(message = "Full name is required")
     private String fullName;

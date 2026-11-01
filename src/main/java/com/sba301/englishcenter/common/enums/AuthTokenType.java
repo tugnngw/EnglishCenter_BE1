@@ -8,7 +8,8 @@ import lombok.RequiredArgsConstructor;
 public enum AuthTokenType {
 
     REFRESH("REFRESH"),
-    ACCESS_REVOKED("ACCESS_REVOKED");
+    ACCESS_REVOKED("ACCESS_REVOKED"),
+    ACCOUNT_ACTIVATION("ACCOUNT_ACTIVATION");
 
     private final String value;
 }

@@ -3,11 +3,14 @@ package com.sba301.englishcenter.service.impl;
 import com.sba301.englishcenter.common.enums.AuthTokenType;
 import com.sba301.englishcenter.common.enums.NotificationType;
 import com.sba301.englishcenter.common.enums.RoleName;
+import com.sba301.englishcenter.config.AppProperties;
+import com.sba301.englishcenter.dto.request.ActivateAccountRequest;
 import com.sba301.englishcenter.dto.request.ChangePasswordRequest;
 import com.sba301.englishcenter.dto.request.LoginRequest;
 import com.sba301.englishcenter.dto.request.LogoutRequest;
 import com.sba301.englishcenter.dto.request.RefreshTokenRequest;
 import com.sba301.englishcenter.dto.request.RegisterRequest;
+import com.sba301.englishcenter.dto.response.ActivationInfoResponse;
 import com.sba301.englishcenter.dto.response.AuthResponse;
 import com.sba301.englishcenter.dto.response.UserResponse;
 import com.sba301.englishcenter.entity.AuthToken;
@@ -23,6 +26,7 @@ import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.security.UserPrincipal;
 import com.sba301.englishcenter.security.jwt.JwtTokenProvider;
 import com.sba301.englishcenter.service.AuthService;
+import com.sba301.englishcenter.service.EmailService;
 import com.sba301.englishcenter.service.NotificationService;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
@@ -32,9 +36,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -44,6 +52,7 @@ public class AuthServiceImpl implements AuthService {
 
     private static final int MAX_FAILED_ATTEMPTS = 5;
     private static final int LOCK_DURATION_MINUTES = 15;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
@@ -52,12 +61,23 @@ public class AuthServiceImpl implements AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider tokenProvider;
     private final NotificationService notificationService;
+    private final EmailService emailService;
+    private final AppProperties appProperties;
 
     @Override
     @Transactional
     public UserResponse register(RegisterRequest request) {
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new AppException(ErrorCode.USER_EXISTED);
+        Optional<User> existing = userRepository.findByEmail(request.getEmail());
+        if (existing.isPresent()) {
+            User user = existing.get();
+            if (Boolean.TRUE.equals(user.getIsActive())) {
+                throw new AppException(ErrorCode.USER_EXISTED);
+            }
+            // Email đã đăng ký nhưng chưa kích hoạt → phát hành link mới (link cũ mất hiệu lực),
+            // gửi lại email — người dùng đóng tab/vẫn còn chờ link đều đăng ký lại bình thường.
+            String rawToken = issueActivationToken(user);
+            sendActivationEmailQuietly(user, rawToken);
+            return toUserResponse(user);
         }
 
         Role defaultRole = roleRepository.findByRoleName(RoleName.USER.name())
@@ -65,27 +85,80 @@ public class AuthServiceImpl implements AuthService {
 
         User user = User.builder()
                 .email(request.getEmail())
-                .password(passwordEncoder.encode(request.getPassword()))
+                // Cột password NOT NULL: đặt giá trị ngẫu nhiên không dùng được —
+                // chủ tài khoản sẽ đặt mật khẩu thật qua link kích hoạt (activateAccount).
+                .password(passwordEncoder.encode(UUID.randomUUID().toString()))
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
                 .role(defaultRole)
-                .isActive(true)
+                .isActive(false)
                 .failedLoginAttempts(0)
                 .build();
 
         User savedUser = userRepository.save(user);
 
-        // StudentProfile is not created yet; it will be created when user purchases a course and upgrades to STUDENT.
+        String rawToken = issueActivationToken(savedUser);
+        sendActivationEmailQuietly(savedUser, rawToken);
+
+        // StudentProfile không tạo ở đây; chỉ tạo khi user mua khóa và nâng cấp lên STUDENT.
+        return toUserResponse(savedUser);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ActivationInfoResponse verifyActivationToken(String token) {
+        AuthToken authToken = findValidActivationToken(token);
+        User user = authToken.getUser();
+        return ActivationInfoResponse.builder()
+                .email(user.getEmail())
+                .fullName(user.getFullName())
+                .build();
+    }
+
+    @Override
+    @Transactional
+    public AuthResponse activateAccount(ActivateAccountRequest request) {
+        AuthToken authToken = findValidActivationToken(request.getToken());
+        User user = authToken.getUser();
+
+        if (Boolean.TRUE.equals(user.getIsActive())) {
+            // Tài khoản đã kích hoạt rồi → link này không dùng lại được
+            authToken.setRevoked(true);
+            authTokenRepository.save(authToken);
+            throw new AppException(ErrorCode.ACTIVATION_TOKEN_INVALID);
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setIsActive(true);
+        user.setLastUpdated(LocalDateTime.now());
+        userRepository.save(user);
+
+        authToken.setRevoked(true);
+        authTokenRepository.save(authToken);
 
         try {
-            notificationService.notify(savedUser.getUserId(), NotificationType.general,
+            notificationService.notify(user.getUserId(), NotificationType.general,
                     "Làm test trình độ miễn phí",
                     "Chào mừng bạn! Hãy làm bài test trình độ miễn phí để xác định lộ trình học phù hợp.");
         } catch (Exception e) {
-            log.warn("Failed to send welcome notification to user {}: {}", savedUser.getUserId(), e.getMessage());
+            log.warn("Failed to send welcome notification to user {}: {}", user.getUserId(), e.getMessage());
         }
 
-        return toUserResponse(savedUser);
+        log.info("Account activated via email link for user: {}", user.getEmail());
+        return createSession(user);
+    }
+
+    @Override
+    @Transactional
+    public void resendActivation(String email) {
+        Optional<User> maybeUser = userRepository.findByEmail(email);
+        if (maybeUser.isEmpty() || Boolean.TRUE.equals(maybeUser.get().getIsActive())) {
+            // Luôn trả OK generic (controller) — không tiết lộ email có tồn tại/chưa kích hoạt hay không
+            return;
+        }
+        User user = maybeUser.get();
+        String rawToken = issueActivationToken(user);
+        sendActivationEmailQuietly(user, rawToken);
     }
 
     @Override
@@ -116,29 +189,7 @@ public class AuthServiceImpl implements AuthService {
         user.setLockedUntil(null);
         userRepository.save(user);
 
-        UserPrincipal principal = UserPrincipal.create(user);
-        String accessToken = tokenProvider.generateAccessToken(principal);
-        String refreshToken = tokenProvider.generateRefreshToken(principal);
-        String refreshHash = JwtTokenProvider.hashToken(refreshToken);
-
-        LocalDateTime refreshExpiry = LocalDateTime.now()
-                .plusSeconds(tokenProvider.getRefreshTokenExpiry() / 1000);
-
-        AuthToken authToken = AuthToken.builder()
-                .tokenHash(refreshHash)
-                .tokenType(AuthTokenType.REFRESH)
-                .user(user)
-                .expiresAt(refreshExpiry)
-                .revoked(false)
-                .build();
-        authTokenRepository.save(authToken);
-
-        return AuthResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .expiresIn(tokenProvider.getAccessTokenExpiry() / 1000)
-                .user(toUserResponse(user))
-                .build();
+        return createSession(user);
     }
 
     @Override
@@ -187,29 +238,7 @@ public class AuthServiceImpl implements AuthService {
         storedToken.setRevoked(true);
         authTokenRepository.save(storedToken);
 
-        UserPrincipal principal = UserPrincipal.create(user);
-        String newAccessToken = tokenProvider.generateAccessToken(principal);
-        String newRefreshToken = tokenProvider.generateRefreshToken(principal);
-        String newRefreshHash = JwtTokenProvider.hashToken(newRefreshToken);
-
-        LocalDateTime newRefreshExpiry = LocalDateTime.now()
-                .plusSeconds(tokenProvider.getRefreshTokenExpiry() / 1000);
-
-        AuthToken newAuthToken = AuthToken.builder()
-                .tokenHash(newRefreshHash)
-                .tokenType(AuthTokenType.REFRESH)
-                .user(user)
-                .expiresAt(newRefreshExpiry)
-                .revoked(false)
-                .build();
-        authTokenRepository.save(newAuthToken);
-
-        return AuthResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(newRefreshToken)
-                .expiresIn(tokenProvider.getAccessTokenExpiry() / 1000)
-                .user(toUserResponse(user))
-                .build();
+        return createSession(user);
     }
 
     @Override
@@ -312,6 +341,82 @@ public class AuthServiceImpl implements AuthService {
                 .role(user.getRole().getRoleName())
                 .isActive(user.getIsActive())
                 .createdAt(user.getCreatedAt())
+                .build();
+    }
+
+    /**
+     * Phát hành token kích hoạt mới cho user: revoke toàn bộ token kích hoạt
+     * còn hiệu lực trước đó (link cũ mất tác dụng), lưu SHA-256 hash vào auth_tokens.
+     *
+     * @return token raw (hex 64 ký tự) — chỉ xuất hiện trong link email, không lưu DB
+     */
+    private String issueActivationToken(User user) {
+        List<AuthToken> active = authTokenRepository
+                .findByUser_UserIdAndTokenTypeAndRevokedFalse(user.getUserId(), AuthTokenType.ACCOUNT_ACTIVATION);
+        for (AuthToken old : active) {
+            old.setRevoked(true);
+        }
+        authTokenRepository.saveAll(active);
+
+        byte[] bytes = new byte[32];
+        SECURE_RANDOM.nextBytes(bytes);
+        String rawToken = HexFormat.of().formatHex(bytes);
+
+        AuthToken token = AuthToken.builder()
+                .tokenHash(JwtTokenProvider.hashToken(rawToken))
+                .tokenType(AuthTokenType.ACCOUNT_ACTIVATION)
+                .user(user)
+                .expiresAt(LocalDateTime.now()
+                        .plusHours(appProperties.getAuth().getActivation().getTokenExpiryHours()))
+                .revoked(false)
+                .build();
+        authTokenRepository.save(token);
+
+        return rawToken;
+    }
+
+    /** Tìm token kích hoạt theo hash, kiểm tra còn hiệu lực; không hợp lệ → ACTIVATION_TOKEN_INVALID. */
+    private AuthToken findValidActivationToken(String rawToken) {
+        AuthToken authToken = authTokenRepository
+                .findByTokenHashAndTokenType(JwtTokenProvider.hashToken(rawToken), AuthTokenType.ACCOUNT_ACTIVATION)
+                .orElseThrow(() -> new AppException(ErrorCode.ACTIVATION_TOKEN_INVALID));
+
+        if (Boolean.TRUE.equals(authToken.getRevoked()) || authToken.getExpiresAt().isBefore(LocalDateTime.now())) {
+            throw new AppException(ErrorCode.ACTIVATION_TOKEN_INVALID);
+        }
+        return authToken;
+    }
+
+    /** Gửi email kích hoạt; lỗi email không phá luồng đăng ký (log và cho qua). */
+    private void sendActivationEmailQuietly(User user, String rawToken) {
+        String link = appProperties.getFrontend().getBaseUrl() + "/set-password?token=" + rawToken;
+        try {
+            emailService.sendAccountActivationEmail(user.getEmail(), user.getFullName(), link);
+        } catch (Exception e) {
+            log.warn("Failed to send activation email to {}: {}", user.getEmail(), e.getMessage());
+        }
+    }
+
+    /** Tạo phiên JWT (access + refresh, lưu refresh hash) — dùng cho login/refresh/activate. */
+    private AuthResponse createSession(User user) {
+        UserPrincipal principal = UserPrincipal.create(user);
+        String accessToken = tokenProvider.generateAccessToken(principal);
+        String refreshToken = tokenProvider.generateRefreshToken(principal);
+
+        AuthToken authToken = AuthToken.builder()
+                .tokenHash(JwtTokenProvider.hashToken(refreshToken))
+                .tokenType(AuthTokenType.REFRESH)
+                .user(user)
+                .expiresAt(LocalDateTime.now().plusSeconds(tokenProvider.getRefreshTokenExpiry() / 1000))
+                .revoked(false)
+                .build();
+        authTokenRepository.save(authToken);
+
+        return AuthResponse.builder()
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .expiresIn(tokenProvider.getAccessTokenExpiry() / 1000)
+                .user(toUserResponse(user))
                 .build();
     }
 }

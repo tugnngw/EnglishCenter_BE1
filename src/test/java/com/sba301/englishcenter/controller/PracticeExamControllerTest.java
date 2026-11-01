@@ -68,7 +68,7 @@ class PracticeExamControllerTest {
     @Test
     @DisplayName("Khách xem danh sách đề luyện tập không cần đăng nhập")
     void publicList() throws Exception {
-        when(practiceExamService.getPracticeExams(isNull(), isNull(), any()))
+        when(practiceExamService.getPracticeExams(isNull(), isNull(), isNull(), any()))
                 .thenReturn(PageResponse.<PracticeExamResponse>builder().data(List.of()).totalElements(0).build());
         mockMvc.perform(get("/api/v1/practice-exams")).andExpect(status().isOk())
                 .andExpect(jsonPath("$.totalElements").value(0));

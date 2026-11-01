@@ -16,6 +16,7 @@ import com.sba301.englishcenter.repository.RoleRepository;
 import com.sba301.englishcenter.repository.StudentProfileRepository;
 import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
+import com.sba301.englishcenter.service.EmailService;
 import com.sba301.englishcenter.service.MentorService;
 import com.sba301.englishcenter.specification.MentorSpecification;
 import com.sba301.englishcenter.util.SessionVariableHelper;
@@ -45,6 +46,7 @@ public class MentorServiceImpl implements MentorService {
     private final StudentProfileRepository studentProfileRepository;
     private final PasswordEncoder passwordEncoder;
     private final SessionVariableHelper sessionVariableHelper;
+    private final EmailService emailService;
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private static final String UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -109,13 +111,22 @@ public class MentorServiceImpl implements MentorService {
 
         mentorProfileRepository.save(profile);
 
+        // Gửi mật khẩu tạm về email mentor. Lỗi email không rollback việc tạo mentor —
+        // tempPassword vẫn trả về trong response để admin gửi thủ công làm fallback.
+        try {
+            emailService.sendMentorWelcomeEmail(mentor.getEmail(), mentor.getFullName(), tempPassword);
+        } catch (Exception e) {
+            log.warn("Failed to send welcome email to mentor {}: {}", mentor.getEmail(), e.getMessage());
+        }
+
         log.info("Mentor created: email={}", mentor.getEmail());
 
         return CreateMentorResponse.builder()
                 .mentor(toMentorResponse(mentor, profile))
                 .tempPassword(tempPassword)
-                .note("Vui lòng gửi mật khẩu tạm thời này cho mentor. " +
-                      "Mentor phải đổi mật khẩu trong lần đăng nhập đầu tiên.")
+                .note("Mật khẩu tạm đã được gửi tới email của mentor. " +
+                      "Mentor phải đổi mật khẩu trong lần đăng nhập đầu tiên. " +
+                      "Nếu email lỗi, admin có thể gửi thủ công mật khẩu bên dưới.")
                 .build();
     }
 
