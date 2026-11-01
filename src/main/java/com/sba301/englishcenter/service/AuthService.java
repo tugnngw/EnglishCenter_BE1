@@ -15,18 +15,19 @@ import java.util.UUID;
 public interface AuthService {
 
     /**
-     * Đăng ký bằng email: tạo tài khoản CHƯA kích hoạt (isActive=false,
-     * chưa có mật khẩu thật) và gửi email chứa link đặt mật khẩu.
-     * Email đã tồn tại nhưng chưa kích hoạt → gửi lại email mới (link cũ hết hiệu lực).
+     * Đăng ký: tạo tài khoản CHƯA kích hoạt (isActive=false) với mật khẩu người dùng nhập,
+     * sau đó gửi email chứa link xác minh.
+     * Email đã tồn tại nhưng chưa kích hoạt → cập nhật lại thông tin, gửi email mới (link cũ hết hiệu lực).
      */
     UserResponse register(RegisterRequest request);
 
-    /** Kiểm tra token kích hoạt từ link email (trang /set-password). */
+    /** Kiểm tra token kích hoạt từ link email (trang /activate). */
     ActivationInfoResponse verifyActivationToken(String token);
 
     /**
-     * Hoàn tất kích hoạt: đặt mật khẩu từ link email, kích hoạt tài khoản
+     * Hoàn tất kích hoạt: xác minh token từ link email, kích hoạt tài khoản
      * và trả AuthResponse (access + refresh) để FE tự đăng nhập luôn.
+     * (Mật khẩu đã được đặt ở bước đăng ký.)
      */
     AuthResponse activateAccount(ActivateAccountRequest request);
 

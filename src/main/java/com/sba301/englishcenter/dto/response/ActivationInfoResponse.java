@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Kết quả kiểm tra token kích hoạt — trang /set-password hiển thị "Đặt mật khẩu cho {fullName}".
+ * Kết quả kiểm tra token kích hoạt — trang /activate hiển thị "Kích hoạt tài khoản cho {fullName}".
  */
 @Getter
 @Setter

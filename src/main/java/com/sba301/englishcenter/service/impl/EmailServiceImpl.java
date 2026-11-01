@@ -38,13 +38,13 @@ public class EmailServiceImpl implements EmailService {
                   <p style="font-size:15px;line-height:1.6">Xin chào <strong>%s,</strong></p>
                   <p style="font-size:15px;line-height:1.6">
                     Bạn (hoặc ai đó) vừa đăng ký tài khoản <strong>%s</strong> với email này.
-                    Để hoàn tất, vui lòng bấm nút bên dưới và <strong>đặt mật khẩu</strong> cho tài khoản của bạn:
+                    Để hoàn tất, vui lòng bấm nút bên dưới để <strong>xác minh email và kích hoạt</strong> tài khoản của bạn:
                   </p>
                   <p style="text-align:center;margin:28px 0">
                     <a href="%s"
                        style="display:inline-block;background:linear-gradient(90deg,#4f46e5,#4338ca);color:#ffffff;
                               text-decoration:none;font-weight:bold;padding:12px 28px;border-radius:10px">
-                      Đặt mật khẩu &amp; kích hoạt tài khoản
+                      Xác minh &amp; kích hoạt tài khoản
                     </a>
                   </p>
                   <p style="font-size:13px;color:#64748b;line-height:1.6">

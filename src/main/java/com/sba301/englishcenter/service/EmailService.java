@@ -9,7 +9,7 @@ public interface EmailService {
 
     /**
      * Email kích hoạt tài khoản cho user tự đăng ký:
-     * chứa link đặt mật khẩu (trang /set-password trên web).
+     * chứa link xác minh email (trang /activate trên web).
      */
     void sendAccountActivationEmail(String toEmail, String fullName, String activationLink);
 

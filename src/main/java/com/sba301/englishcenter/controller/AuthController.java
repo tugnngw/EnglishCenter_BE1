@@ -39,10 +39,11 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/register")
-    @Operation(summary = "Register a new account by email",
-            description = "Creates an INACTIVE account and sends an email with an activation link. " +
-                    "The user sets the password on the /set-password page (POST /api/v1/auth/activate). " +
-                    "Re-registering with an unactivated email re-sends a fresh link.")
+    @Operation(summary = "Register a new account",
+            description = "Creates an INACTIVE account with the password the user chose, then sends " +
+                    "an email with an activation link. The user clicks the link (POST /api/v1/auth/activate) " +
+                    "to verify the email and activate the account. " +
+                    "Re-registering with an unactivated email updates the info and re-sends a fresh link.")
     public ResponseEntity<ApiResponse<UserResponse>> register(@Valid @RequestBody RegisterRequest request) {
         UserResponse user = authService.register(request);
         return ResponseEntity
@@ -52,7 +53,7 @@ public class AuthController {
 
     @PostMapping("/verify-activation-token")
     @Operation(summary = "Verify an account activation token",
-            description = "Public endpoint used by the /set-password page: checks the token from the email link " +
+            description = "Public endpoint used by the /activate page: checks the token from the email link " +
                     "and returns the account's email and full name for display.")
     public ApiResponse<ActivationInfoResponse> verifyActivationToken(
             @Valid @RequestBody ActivationTokenRequest request) {
@@ -60,9 +61,9 @@ public class AuthController {
     }
 
     @PostMapping("/activate")
-    @Operation(summary = "Complete activation by setting the password",
-            description = "Consumes the activation token from the email link, sets the user's password, " +
-                    "activates the account and returns a JWT session (auto-login on the web).")
+    @Operation(summary = "Complete activation via the email link",
+            description = "Consumes the activation token from the email link and activates the account " +
+                    "(the password was chosen at registration). Returns a JWT session (auto-login on the web).")
     public ApiResponse<AuthResponse> activate(@Valid @RequestBody ActivateAccountRequest request) {
         return ApiResponse.success("Kích hoạt tài khoản thành công", authService.activateAccount(request));
     }

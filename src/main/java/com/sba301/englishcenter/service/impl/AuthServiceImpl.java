@@ -73,8 +73,15 @@ public class AuthServiceImpl implements AuthService {
             if (Boolean.TRUE.equals(user.getIsActive())) {
                 throw new AppException(ErrorCode.USER_EXISTED);
             }
-            // Email đã đăng ký nhưng chưa kích hoạt → phát hành link mới (link cũ mất hiệu lực),
-            // gửi lại email — người dùng đóng tab/vẫn còn chờ link đều đăng ký lại bình thường.
+            // Email đã đăng ký nhưng chưa kích hoạt → cập nhật mật khẩu (người dùng
+            // đăng ký lại với mật khẩu mới), phát hành link mới (link cũ mất hiệu lực)
+            // và gửi lại email.
+            user.setPassword(passwordEncoder.encode(request.getPassword()));
+            user.setFullName(request.getFullName());
+            if (StringUtils.hasText(request.getPhone())) {
+                user.setPhone(request.getPhone());
+            }
+            userRepository.save(user);
             String rawToken = issueActivationToken(user);
             sendActivationEmailQuietly(user, rawToken);
             return toUserResponse(user);
@@ -85,9 +92,7 @@ public class AuthServiceImpl implements AuthService {
 
         User user = User.builder()
                 .email(request.getEmail())
-                // Cột password NOT NULL: đặt giá trị ngẫu nhiên không dùng được —
-                // chủ tài khoản sẽ đặt mật khẩu thật qua link kích hoạt (activateAccount).
-                .password(passwordEncoder.encode(UUID.randomUUID().toString()))
+                .password(passwordEncoder.encode(request.getPassword()))
                 .fullName(request.getFullName())
                 .phone(request.getPhone())
                 .role(defaultRole)
@@ -128,7 +133,7 @@ public class AuthServiceImpl implements AuthService {
             throw new AppException(ErrorCode.ACTIVATION_TOKEN_INVALID);
         }
 
-        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        // Mật khẩu đã được đặt ở bước đăng ký — chỉ cần xác minh token và kích hoạt.
         user.setIsActive(true);
         user.setLastUpdated(LocalDateTime.now());
         userRepository.save(user);
@@ -389,7 +394,7 @@ public class AuthServiceImpl implements AuthService {
 
     /** Gửi email kích hoạt; lỗi email không phá luồng đăng ký (log và cho qua). */
     private void sendActivationEmailQuietly(User user, String rawToken) {
-        String link = appProperties.getFrontend().getBaseUrl() + "/set-password?token=" + rawToken;
+        String link = appProperties.getFrontend().getBaseUrl() + "/activate?token=" + rawToken;
         try {
             emailService.sendAccountActivationEmail(user.getEmail(), user.getFullName(), link);
         } catch (Exception e) {

@@ -7,7 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-/** Body kiểm tra token kích hoạt tài khoản (endpoint public, dùng khi mở trang /set-password). */
+/** Body kiểm tra token kích hoạt tài khoản (endpoint public, dùng khi mở trang /activate). */
 @Getter
 @Setter
 @Builder

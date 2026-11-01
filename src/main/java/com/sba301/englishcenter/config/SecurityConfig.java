@@ -39,7 +39,7 @@ public class SecurityConfig {
             "/api/v1/auth/register",
             "/api/v1/auth/login",
             "/api/v1/auth/refresh",
-            // Luồng kích hoạt tài khoản qua email (trang /set-password công khai)
+            // Luồng kích hoạt tài khoản qua email (trang /activate công khai)
             "/api/v1/auth/verify-activation-token",
             "/api/v1/auth/activate",
             "/api/v1/auth/resend-activation",
