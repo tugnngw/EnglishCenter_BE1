@@ -3,6 +3,7 @@ package com.sba301.englishcenter.service;
 import com.sba301.englishcenter.common.enums.AttemptStatus;
 import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.QuestionType;
+import com.sba301.englishcenter.dto.practice.EssayAiEvaluationData;
 import com.sba301.englishcenter.dto.response.AnswerResultResponse;
 import com.sba301.englishcenter.dto.response.AttemptDetailResponse;
 import com.sba301.englishcenter.dto.response.AttemptResultResponse;
@@ -22,6 +23,7 @@ import com.sba301.englishcenter.entity.ExamSection;
 import com.sba301.englishcenter.entity.Question;
 import com.sba301.englishcenter.entity.QuestionOption;
 import com.sba301.englishcenter.entity.User;
+import com.sba301.englishcenter.util.JsonbMapper;
 import com.sba301.englishcenter.util.QuestionValidator;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -331,7 +333,9 @@ public class ExamMapper {
                     .earnedScore(scoreVisible && !pending ? earned : null)
                     .pendingManualGrading(q.getQuestionType() == QuestionType.ESSAY ? pending : null)
                     .mentorFeedback(answer != null ? answer.getMentorFeedback() : null)
-                    .gradedDate(answer != null ? answer.getGradedDate() : null);
+                    .gradedDate(answer != null ? answer.getGradedDate() : null)
+                    .aiEvaluation(answer != null
+                            ? JsonbMapper.read(answer.getAiEvaluation(), EssayAiEvaluationData.class) : null);
 
             if (answersVisible) {
                 builder.explanation(q.getExplanation());

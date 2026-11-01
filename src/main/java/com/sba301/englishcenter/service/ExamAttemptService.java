@@ -1,6 +1,7 @@
 package com.sba301.englishcenter.service;
 
 import com.sba301.englishcenter.common.PageResponse;
+import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.dto.request.SaveAnswersRequest;
 import com.sba301.englishcenter.dto.request.SubmitAttemptRequest;
 import com.sba301.englishcenter.dto.response.AttemptDetailResponse;
@@ -32,6 +33,16 @@ public interface ExamAttemptService {
 
     /** Lịch sử thi của học viên đang đăng nhập (lọc theo đề nếu có examId). */
     PageResponse<AttemptSummaryResponse> getMyAttempts(UUID examId, Pageable pageable);
+
+    /** Lịch sử thi lọc theo đề hoặc phạm vi đề (VD practice cho trang Luyện tập AI). */
+    PageResponse<AttemptSummaryResponse> getMyAttempts(UUID examId, ExamScope examScope, Pageable pageable);
+
+    /**
+     * Đề luyện tập: AI (Claude) chấm các câu Writing / Speaking chưa có điểm theo thang chứng chỉ mục tiêu,
+     * rồi tính lại tổng điểm. Reading / Listening đã tự chấm theo đáp án lúc nộp. Gọi lại khi đã chấm hết
+     * thì trả kết quả hiện tại.
+     */
+    AttemptResultResponse aiGradeAttempt(UUID attemptId);
 
     AttemptResultResponse getMyAttemptResult(UUID attemptId);
 

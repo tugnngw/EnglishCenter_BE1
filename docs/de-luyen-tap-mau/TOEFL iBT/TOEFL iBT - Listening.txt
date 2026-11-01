@@ -1,0 +1,32 @@
+# TOEFL iBT Listening - đề mẫu để test (không phải đề thật)
+# File nghe: /audio/practice/toefl-listening.mp3 (đặt trong FE_EnglishCenter/public/audio/practice)
+
+[SECTION] LISTENING | TOEFL iBT Listening - Academic Lecture
+[INSTRUCTIONS] Listen to part of a lecture in a biology class. Choose the best answer to each question.
+[AUDIO] /audio/practice/toefl-listening.mp3
+1. What is the lecture mainly about?
+*A. How honeybees communicate the location of food
+B. How honeybees make honey
+C. The life cycle of a honeybee colony
+D. Threats to honeybee populations
+2. According to the professor, what does the direction of the middle part of the dance show?
+*A. The direction of the food compared to the sun
+B. The number of flowers at the food source
+C. The quality of the nectar
+D. The position of the queen bee
+3. What does a longer waggle tell the other bees?
+A. There is more food.
+*B. The food is farther away.
+C. There is danger near the hive.
+D. The sun is going down.
+4. Who was Karl von Frisch?
+A. A beekeeper who trained bees to dance
+*B. A scientist who explained the meaning of the waggle dance
+C. A student who disagreed with the professor
+D. A photographer who filmed bees
+5. What does the professor imply about recent research?
+A. The waggle dance is not important.
+B. Bees cannot see the sun.
+*C. Bees use smell in addition to the dance.
+D. Von Frisch's work was completely wrong.
+[EXPLAIN] "Bees also use smell to confirm the location, so the dance isn't the only signal they rely on."

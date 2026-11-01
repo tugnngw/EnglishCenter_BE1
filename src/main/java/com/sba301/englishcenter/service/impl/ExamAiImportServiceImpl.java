@@ -6,7 +6,7 @@ import com.sba301.englishcenter.dto.request.AiImportRequest;
 import com.sba301.englishcenter.dto.response.AiImportResponse;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
-import com.sba301.englishcenter.integration.ai.GeminiDocumentClient;
+import com.sba301.englishcenter.integration.ai.ClaudeClient;
 import com.sba301.englishcenter.service.ExamAiImportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,8 +23,11 @@ import java.util.Locale;
 @RequiredArgsConstructor
 public class ExamAiImportServiceImpl implements ExamAiImportService {
 
-    /** Giới hạn PDF gửi thẳng cho Gemini (inline_data) */
+    /** Giới hạn PDF gửi thẳng cho Claude (document block) */
     static final int MAX_PDF_BYTES = 15 * 1024 * 1024;
+
+    /** Một bộ đề dài có thể ra nhiều chữ */
+    static final int MAX_OUTPUT_TOKENS = 16000;
 
     private static final List<String> DEFAULT_SECTIONS = List.of("LISTENING", "READING", "WRITING", "SPEAKING", "GENERAL");
 
@@ -73,7 +76,7 @@ public class ExamAiImportServiceImpl implements ExamAiImportService {
             - Do not invent tasks; skip reading / listening questions. The certificate context is: %s.
             """;
 
-    private final GeminiDocumentClient gemini;
+    private final ClaudeClient claude;
     private final ObjectMapper json = new ObjectMapper();
 
     @Override
@@ -87,13 +90,15 @@ public class ExamAiImportServiceImpl implements ExamAiImportService {
                 : "general English";
 
         if (request.getTarget() == AiImportRequest.Target.PRACTICE) {
-            String raw = gemini.generate(PRACTICE_INSTRUCTION.formatted(certificate), pdf, text, true);
+            String raw = claude.generate(PRACTICE_INSTRUCTION.formatted(certificate), pdf, text, MAX_OUTPUT_TOKENS,
+                    ErrorCode.AI_IMPORT_FAILED);
             return AiImportResponse.builder().prompts(practiceDrafts(raw)).build();
         }
         List<String> sections = request.getSections() == null ? List.of()
                 : request.getSections().stream().filter(StringUtils::hasText).map(String::trim).toList();
         String allowed = String.join(", ", sections.isEmpty() ? DEFAULT_SECTIONS : sections);
-        String content = gemini.generate(EXAM_INSTRUCTION.formatted(certificate, allowed), pdf, text, false);
+        String content = claude.generate(EXAM_INSTRUCTION.formatted(certificate, allowed), pdf, text, MAX_OUTPUT_TOKENS,
+                ErrorCode.AI_IMPORT_FAILED);
         log.info("AI đọc file đề {} ({} ký tự kết quả)", request.getFileName(), content.length());
         return AiImportResponse.builder().content(content).build();
     }
@@ -120,7 +125,7 @@ public class ExamAiImportServiceImpl implements ExamAiImportService {
 
     List<AiImportResponse.PracticeDraft> practiceDrafts(String raw) {
         try {
-            JsonNode root = json.readTree(raw);
+            JsonNode root = json.readTree(raw.trim().startsWith("[") ? raw : ClaudeClient.jsonObjectOf(raw));
             JsonNode items = root.isArray() ? root : root.path("prompts");
             List<AiImportResponse.PracticeDraft> drafts = new ArrayList<>();
             for (JsonNode item : items) {

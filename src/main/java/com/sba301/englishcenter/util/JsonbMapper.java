@@ -38,6 +38,18 @@ public final class JsonbMapper {
         }
     }
 
+    /** Chuỗi JSONB object -> đối tượng (null / rỗng -> null). */
+    public static <T> T read(String jsonb, Class<T> type) {
+        if (!StringUtils.hasText(jsonb)) {
+            return null;
+        }
+        try {
+            return MAPPER.readValue(jsonb, type);
+        } catch (Exception ex) {
+            throw new AppException(ErrorCode.UNCATEGORIZED_EXCEPTION);
+        }
+    }
+
     public static String write(Object value) {
         try {
             return MAPPER.writeValueAsString(value);

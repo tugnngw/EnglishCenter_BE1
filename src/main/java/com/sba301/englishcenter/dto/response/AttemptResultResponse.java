@@ -37,4 +37,6 @@ public class AttemptResultResponse {
 
     List<SectionScoreResponse> sectionScores;
     List<AnswerResultResponse> answers;
+    /** Đề luyện tập đã chấm xong: band / CEFR theo chứng chỉ mục tiêu của học viên */
+    PracticeLevelResponse practiceLevel;
 }

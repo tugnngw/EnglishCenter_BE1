@@ -39,6 +39,15 @@ public class ScoringScaleResolver {
 
     @Transactional(readOnly = true)
     public ScoringScale resolve(UUID studentId, PracticeExamType skill) {
+        return resolve(studentId, skill.name());
+    }
+
+    /**
+     * Thang của một kỹ năng bất kỳ (LISTENING / READING / WRITING / SPEAKING) theo chứng chỉ mục tiêu;
+     * {@code skill = null} → thang chung (điểm tổng) của chứng chỉ.
+     */
+    @Transactional(readOnly = true)
+    public ScoringScale resolve(UUID studentId, String skill) {
         Optional<Certificate> certificate = studentProfileRepository.findById(studentId)
                 .map(StudentProfile::getTargetCertificateId)
                 .flatMap(certificateRepository::findById);
@@ -51,7 +60,7 @@ public class ScoringScaleResolver {
         // 1. Part trùng kỹ năng
         for (CertificatePart part : certificatePartRepository
                 .findByCertificate_CertificateIdOrderByPartOrderAsc(cert.getCertificateId())) {
-            if (part.getPartName() != null && part.getPartName().toUpperCase().contains(skill.name())) {
+            if (skill != null && part.getPartName() != null && part.getPartName().toUpperCase().contains(skill)) {
                 ScoringScale scale = fromJson(name, part.getProperties());
                 if (scale != null) {
                     return scale;

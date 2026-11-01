@@ -2,6 +2,7 @@ package com.sba301.englishcenter.dto.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.sba301.englishcenter.common.enums.QuestionType;
+import com.sba301.englishcenter.dto.practice.EssayAiEvaluationData;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -52,4 +53,6 @@ public class AnswerResultResponse {
     /** Nhận xét của mentor (Writing/Speaking). */
     String mentorFeedback;
     LocalDateTime gradedDate;
+    /** Đề luyện tập: kết quả AI chấm câu Writing / Speaking (band, CEFR, 4 tiêu chí, nhận xét, gợi ý). */
+    EssayAiEvaluationData aiEvaluation;
 }

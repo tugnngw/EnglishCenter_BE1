@@ -1,0 +1,36 @@
+# VSTEP Listening (B1-C1) - đề mẫu để test (không phải đề thật)
+# File nghe: /audio/practice/vstep-listening.mp3 (đặt trong FE_EnglishCenter/public/audio/practice)
+
+[SECTION] LISTENING | VSTEP Listening - Part 1 & Part 2
+[INSTRUCTIONS] You will hear an announcement and a conversation. Choose the best answer A, B, C or D.
+[AUDIO] /audio/practice/vstep-listening.mp3
+1. From next Monday, what time will the library open?
+A. 7:00 a.m.
+*B. 7:30 a.m.
+C. 8:00 a.m.
+D. 10:00 a.m.
+2. How many books can students borrow at a time?
+A. Three
+B. Four
+*C. Six
+D. Ten
+3. What will happen on Wednesday?
+A. The library will close early.
+*B. The computer room will be closed.
+C. New books will arrive.
+D. The library will open late.
+4. Why can't Lan usually join the club on Saturday mornings?
+A. She has classes.
+*B. She works part-time at a coffee shop.
+C. She visits her family.
+D. She plays sports.
+5. What time does the club meet this week?
+A. 9 a.m.
+B. 12 p.m.
+*C. 2 p.m.
+D. 4 p.m.
+6. What should Lan bring to the club?
+A. A dictionary
+B. Some food
+*C. A short story in English
+D. A book from the library

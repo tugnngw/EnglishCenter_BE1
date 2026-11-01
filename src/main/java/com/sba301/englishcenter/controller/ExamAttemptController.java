@@ -63,12 +63,22 @@ public class ExamAttemptController {
         return ApiResponse.success("Nộp bài thành công", attemptService.submitAttempt(attemptId, request));
     }
 
+    @PostMapping("/attempts/{attemptId}/ai-grade")
+    @Operation(summary = "AI grades Writing / Speaking of a practice attempt",
+            description = "Practice exams only (examScope = practice). Claude grades every answered essay question that has "
+                    + "no score yet, on the scale of the learner's target certificate, then the total is recalculated. "
+                    + "Takes 10 - 60 seconds per question. 6027: ANTHROPIC_API_KEY not set; 6028: AI failed, retry later")
+    public ApiResponse<AttemptResultResponse> aiGrade(@PathVariable UUID attemptId) {
+        return ApiResponse.success("AI đã chấm bài", attemptService.aiGradeAttempt(attemptId));
+    }
+
     @GetMapping("/me/exam-attempts")
-    @Operation(summary = "My attempt history", description = "Newest first; optional examId filter")
+    @Operation(summary = "My attempt history", description = "Newest first; optional examId or examScope filter")
     public PageResponse<AttemptSummaryResponse> getMyAttempts(
             @RequestParam(required = false) UUID examId,
+            @RequestParam(required = false) String examScope,
             @PageableDefault(size = 20, sort = "startTime", direction = Sort.Direction.DESC) Pageable pageable) {
-        return attemptService.getMyAttempts(examId, pageable);
+        return attemptService.getMyAttempts(examId, ExamParams.scope(examScope), pageable);
     }
 
     @GetMapping("/me/proficiency")

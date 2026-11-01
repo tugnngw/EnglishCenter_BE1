@@ -144,14 +144,14 @@ public class RecommendationServiceImpl implements RecommendationService {
         if (certName != null) {
             sb.append("Dành cho mục tiêu ").append(certName);
             if (targetScore != null) {
-                sb.append(" ").append(targetScore.toPlainString());
+                sb.append(" ").append(formatScore(targetScore));
             }
             if (currentLevel != null || currentScore != null) {
                 sb.append(" (Trình độ hiện tại: ");
                 if (currentLevel != null) sb.append(currentLevel);
                 if (currentScore != null) {
                     if (currentLevel != null) sb.append(" · ");
-                    sb.append(currentScore.toPlainString());
+                    sb.append(formatScore(currentScore));
                 }
                 sb.append(")");
             }
@@ -162,6 +162,11 @@ public class RecommendationServiceImpl implements RecommendationService {
         sb.append("Gợi ý ").append(courseCount).append(" khóa học phù hợp và ")
                 .append(pathCount).append(" lộ trình tối ưu.");
         return sb.toString();
+    }
+
+    /** Thang ≤ 10 (IELTS, VSTEP) hiện 1 chữ số thập phân (7.0), thang lớn (TOEIC) hiện số nguyên (650) */
+    private static String formatScore(BigDecimal score) {
+        return score.setScale(score.compareTo(BigDecimal.TEN) <= 0 ? 1 : 0, java.math.RoundingMode.HALF_UP).toPlainString();
     }
 
     private CourseResponse toCourseResponse(Course course) {

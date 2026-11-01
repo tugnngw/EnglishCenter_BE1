@@ -33,7 +33,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/practice-exams")
 @RequiredArgsConstructor
-@Tag(name = "AI Practice", description = "Luyện đề Writing / Speaking tự do, AI (Gemini) chấm theo 4 tiêu chí IELTS")
+@Tag(name = "AI Practice", description = "Luyện đề Writing / Speaking tự do, AI (Claude) chấm theo 4 tiêu chí IELTS")
 public class PracticeExamController {
 
     private final PracticeExamService practiceExamService;
@@ -65,7 +65,7 @@ public class PracticeExamController {
     @PostMapping("/answers/{answerId}/ai-evaluate")
     @PreAuthorize("hasAnyRole('USER', 'STUDENT')")
     @Operation(summary = "Gọi AI chấm bài",
-            description = "Mất 10 - 60 giây. Bài đã chấm thì trả lại kết quả cũ. 6027: chưa cấu hình GEMINI_API_KEY; 6028: AI lỗi, thử lại sau")
+            description = "Mất 10 - 60 giây. Bài đã chấm thì trả lại kết quả cũ. 6027: chưa cấu hình ANTHROPIC_API_KEY; 6028: AI lỗi, thử lại sau")
     public ApiResponse<PracticeEvaluationResponse> evaluate(@PathVariable UUID answerId) {
         return ApiResponse.success(practiceExamService.evaluate(currentUserId(), answerId));
     }

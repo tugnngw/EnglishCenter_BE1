@@ -4,7 +4,7 @@ import com.sba301.englishcenter.dto.request.AiImportRequest;
 import com.sba301.englishcenter.dto.response.AiImportResponse;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
-import com.sba301.englishcenter.integration.ai.GeminiDocumentClient;
+import com.sba301.englishcenter.integration.ai.ClaudeClient;
 import com.sba301.englishcenter.service.impl.ExamAiImportServiceImpl;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -16,7 +16,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
@@ -28,13 +28,13 @@ import static org.mockito.Mockito.when;
  */
 class ExamAiImportServiceTest {
 
-    private final GeminiDocumentClient gemini = mock(GeminiDocumentClient.class);
-    private final ExamAiImportServiceImpl service = new ExamAiImportServiceImpl(gemini);
+    private final ClaudeClient claude = mock(ClaudeClient.class);
+    private final ExamAiImportServiceImpl service = new ExamAiImportServiceImpl(claude);
 
     @Test
     void examSendsPdfAndCertificatePartsToAi() {
         String pdf = Base64.getEncoder().encodeToString("%PDF-1.4 test".getBytes(StandardCharsets.UTF_8));
-        when(gemini.generate(any(), eq(pdf), isNull(), eq(false))).thenReturn("[SECTION] Reading | Part 1\n1. Q?\n*A. a\nB. b");
+        when(claude.generate(any(), eq(pdf), isNull(), anyInt(), eq(ErrorCode.AI_IMPORT_FAILED))).thenReturn("[SECTION] Reading | Part 1\n1. Q?\n*A. a\nB. b");
 
         AiImportResponse res = service.parse(AiImportRequest.builder()
                 .target(AiImportRequest.Target.EXAM).certificateName("IELTS")
@@ -42,7 +42,7 @@ class ExamAiImportServiceTest {
 
         assertThat(res.getContent()).startsWith("[SECTION] Reading");
         ArgumentCaptor<String> instruction = ArgumentCaptor.forClass(String.class);
-        verify(gemini).generate(instruction.capture(), eq(pdf), isNull(), eq(false));
+        verify(claude).generate(instruction.capture(), eq(pdf), isNull(), anyInt(), eq(ErrorCode.AI_IMPORT_FAILED));
         assertThat(instruction.getValue()).contains("certificate: IELTS").contains("exactly one of: Listening, Reading");
     }
 
@@ -60,7 +60,7 @@ class ExamAiImportServiceTest {
 
     @Test
     void practiceKeepsOnlyWritingAndSpeakingTasks() {
-        when(gemini.generate(any(), isNull(), eq("Task text"), anyBoolean())).thenReturn("""
+        when(claude.generate(any(), isNull(), eq("Task text"), anyInt(), any())).thenReturn("""
                 {"prompts":[
                   {"title":"Task 2","description":"Some people think...","examType":"writing","bankName":"Cam 18"},
                   {"title":"Part 2","description":"Describe a place","examType":"SPEAKING"},

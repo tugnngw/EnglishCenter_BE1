@@ -1,0 +1,10 @@
+# TOEIC Writing (TOEIC Speaking & Writing) - đề mẫu để test (không phải đề thật)
+# [INSTRUCTIONS] = tiêu chí chấm, được gửi kèm đề bài cho AI khi chấm.
+
+[SECTION] WRITING | TOEIC Writing - Respond to a written request
+[INSTRUCTIONS] You have 10 minutes. Write a reply email of about 100-150 words. Scoring criteria (TOEIC Writing scale 0-200): task - answers ALL questions / tasks in the request in an appropriate business tone; organisation - greeting, clear body, polite closing; vocabulary - accurate workplace vocabulary; grammar - sentences mostly correct and varied. Missing a required task or wrong tone: at most 110.
+1. [ESSAY] Read the email and write a reply. --- From: Linda Brown, Human Resources. Subject: Staff training day. "Dear team member, we are planning a staff training day next month. Please reply and tell me (1) which topic you would like to learn about, (2) which day of the week is best for you, and (3) one suggestion to make the training more useful. Thank you, Linda." {10}
+
+[SECTION] WRITING | TOEIC Writing - Write an opinion essay
+[INSTRUCTIONS] You have 30 minutes. Write at least 300 words. Scoring criteria (TOEIC Writing scale 0-200): opinion - clear position supported with reasons and specific examples; organisation - introduction, body paragraphs, conclusion, logical transitions; vocabulary - varied and precise; grammar - range of structures with few errors. Under 300 words or no examples: at most 140.
+2. [ESSAY] Some companies allow employees to work from home several days a week. Do you think working from home is better than working in an office? Give reasons and examples to support your opinion. {20}

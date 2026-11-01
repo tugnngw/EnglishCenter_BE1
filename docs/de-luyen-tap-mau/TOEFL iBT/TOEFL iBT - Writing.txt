@@ -1,0 +1,10 @@
+# TOEFL iBT Writing - đề mẫu để test (không phải đề thật)
+# [INSTRUCTIONS] = tiêu chí chấm, được gửi kèm đề bài cho AI khi chấm.
+
+[SECTION] WRITING | TOEFL iBT Writing - Write an Email
+[INSTRUCTIONS] You have 7 minutes. Write an email of about 100-120 words. Scoring criteria (TOEFL iBT Writing scale): task - completes all three points of the situation; organisation - clear purpose, logical order, appropriate opening and closing; language - polite and appropriate tone, precise vocabulary, accurate grammar with some variety. Missing one point of the task: maximum half of the scale.
+1. [ESSAY] You recently joined a university photography club. Last week the club held its first trip, but you could not attend. Write an email to the club leader, Professor Adams. In your email: apologise for missing the trip and explain why; ask about the photos that were taken; suggest an idea for the next club activity. {10}
+
+[SECTION] WRITING | TOEFL iBT Writing - Academic Discussion
+[INSTRUCTIONS] You have 10 minutes. Write at least 100 words to contribute to the discussion. Scoring criteria (TOEFL iBT Writing scale): relevance - directly answers the professor's question and adds a new idea, not only repeating the students; development - reasons supported with explanations or examples; language - varied sentence structures, precise vocabulary, few errors. Fewer than 100 words or only repeating other students: maximum half of the scale.
+2. [ESSAY] Professor: "Many cities are building more bike lanes and reducing space for cars. Is this a good policy? Why or why not?" --- Student Mai: "I support it. Cycling is healthy and it reduces air pollution. If there are safe bike lanes, more people will leave their cars at home." --- Student Kevin: "I'm not sure. In cities with hot or rainy weather, few people want to ride bikes, so the lanes may stay empty while traffic jams get worse." --- Write your response to the professor's question. {15}

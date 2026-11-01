@@ -1,0 +1,37 @@
+# TOEIC Listening - đề mẫu để test (không phải đề thật)
+# File nghe: /audio/practice/toeic-listening.mp3 (đặt trong FE_EnglishCenter/public/audio/practice)
+
+[SECTION] LISTENING | TOEIC Listening - Part 3 & Part 4
+[INSTRUCTIONS] You will hear a conversation and an announcement. Choose the best answer to each question.
+[AUDIO] /audio/practice/toeic-listening.mp3
+1. What are the speakers mainly discussing?
+*A. A sales report
+B. A job interview
+C. A business trip
+D. A new office
+2. What change does the man mention?
+*A. A meeting has been moved to Thursday.
+B. A meeting has been cancelled.
+C. A new manager has been hired.
+D. The report must be shorter.
+3. What will the woman probably do next?
+A. Write an email to the manager
+*B. Call the Tokyo office
+C. Print the report
+D. Book a meeting room
+[EXPLAIN] "I'll call Tokyo now and ask them to email the numbers right away."
+4. Why has the flight been delayed?
+*A. Because of bad weather
+B. Because of a technical problem
+C. Because the crew is late
+D. Because the airport is crowded
+5. What is the new departure time?
+A. 10:15
+*B. 11:15
+C. 11:50
+D. 12:15
+6. Where can passengers get a meal voucher?
+A. At gate 21
+*B. At the information desk near gate 12
+C. At the check-in counter
+D. At the airport café

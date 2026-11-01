@@ -1,0 +1,10 @@
+# TOEFL iBT Speaking - đề mẫu để test (không phải đề thật)
+# Học viên bấm ghi âm và nói; bản phiên âm được gửi cho AI chấm cùng tiêu chí trong [INSTRUCTIONS].
+
+[SECTION] SPEAKING | TOEFL iBT Speaking - Interview
+[INSTRUCTIONS] An interviewer asks you about studying habits. Answer in about 45 seconds. Scoring criteria (TOEFL iBT Speaking scale, grade from the transcript): delivery - fluent, few long pauses or restarts; language use - accurate grammar and vocabulary with some complex structures; topic development - answers the question directly with clear reasons and a personal example. Very short or off-topic answers: maximum one third of the scale.
+1. [ESSAY] Do you prefer to study in the morning or late at night? Why does this work better for you? {5}
+
+[SECTION] SPEAKING | TOEFL iBT Speaking - Independent Opinion
+[INSTRUCTIONS] You have 15 seconds to prepare and 45 seconds to speak. Scoring criteria (TOEFL iBT Speaking scale): delivery - clear and sustained speech; language use - range and control of grammar and vocabulary; topic development - clear opinion, at least two well-developed reasons, logical connections between ideas. No clear opinion: maximum half of the scale.
+2. [ESSAY] Some people think that students should be required to take a year off between high school and university to work or travel. Others think students should go straight to university. Which do you agree with and why? {10}

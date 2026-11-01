@@ -89,6 +89,20 @@ public class UploadService {
         String resourceType = resolveResourceType(extension);
         long maxBytes = resolveMaxBytes(resourceType);
 
+        // File nghe của đề thi / đề luyện tập: chỉ admin, chỉ audio, để public để thẻ <audio> phát được
+        if ("exam_audio".equals(purpose)) {
+            boolean isAdmin = SecurityUtils.getCurrentUserPrincipal()
+                    .map(p -> "ADMIN".equalsIgnoreCase(p.getRoleName()))
+                    .orElse(false);
+            if (!isAdmin) {
+                throw new AppException(ErrorCode.UNAUTHORIZED);
+            }
+            if (!CloudinaryService.RESOURCE_VIDEO.equals(resourceType)) {
+                throw new AppException(ErrorCode.HOMEWORK_FILE_TYPE_NOT_ALLOWED,
+                        "File nghe phải là audio (mp3, wav, m4a, aac, ogg)");
+            }
+        }
+
         Long fileBytes = request.getFileBytes();
         if (fileBytes != null && fileBytes > maxBytes) {
             throw new AppException(ErrorCode.HOMEWORK_FILE_TOO_LARGE,
@@ -182,10 +196,14 @@ public class UploadService {
      * Thư mục đích trên Cloudinary.
      * <ul>
      *     <li>tài liệu bài tập → {@code courses/{courseId}/homework};</li>
-     *     <li>bài nộp học viên → {@code courses/{courseId}/homework/submissions/{homeworkId}/{studentId}}.</li>
+     *     <li>bài nộp học viên → {@code courses/{courseId}/homework/submissions/{homeworkId}/{studentId}};</li>
+     *     <li>file nghe của đề thi / đề luyện tập ({@code exam_audio}, chỉ admin) → {@code exams/audio}.</li>
      * </ul>
      */
     public String buildFolder(String purpose, UUID courseId, UUID homeworkId) {
+        if ("exam_audio".equals(purpose)) {
+            return "exams/audio";
+        }
         StringBuilder folder = new StringBuilder();
         if (courseId != null) {
             folder.append("courses/").append(courseId).append('/');
@@ -216,7 +234,7 @@ public class UploadService {
         }
         String purpose = raw.trim().toLowerCase(Locale.ROOT);
         Set<String> allowed = new LinkedHashSet<>(Set.of(
-                "attachment", "submission", "submission_audio", "multiple_choice"));
+                "attachment", "submission", "submission_audio", "multiple_choice", "exam_audio"));
         if (!allowed.contains(purpose)) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Mục đích upload không hợp lệ: " + raw);
         }

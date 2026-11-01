@@ -5,6 +5,7 @@ import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.ExamStatus;
 import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.entity.Exam;
+import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -23,7 +24,7 @@ public class ExamSpecification {
      * @param keyword       Search in title, code, description
      * @param examType      Loại đề (quiz / midterm / final / placement_test)
      * @param status        Trạng thái đề (public API luôn ép = published)
-     * @param examScope     trial / course
+     * @param examScope     trial / course / practice
      * @param certificateId Lọc theo chứng chỉ
      * @param courseId      Lọc theo khóa học
      * @param level         Lọc theo recommended_level (không phân biệt hoa thường)
@@ -53,8 +54,16 @@ public class ExamSpecification {
             }
             if (examScope != null) {
                 predicates.add(cb.equal(root.get("examScope"), examScope));
+            } else {
+                // Đề luyện tập AI chỉ hiện ở trang Luyện tập AI (lọc examScope = practice), không lẫn vào ngân hàng đề thi
+                predicates.add(cb.notEqual(root.get("examScope"), ExamScope.PRACTICE));
             }
-            if (certificateId != null) {
+            if (certificateId != null && examScope == ExamScope.PRACTICE) {
+                // Đề luyện tập theo mục tiêu: đề của chứng chỉ đó + đề không gắn chứng chỉ (dùng chung)
+                var certificate = root.join("certificate", JoinType.LEFT);
+                predicates.add(cb.or(cb.equal(certificate.get("certificateId"), certificateId),
+                        cb.isNull(certificate.get("certificateId"))));
+            } else if (certificateId != null) {
                 predicates.add(cb.equal(root.get("certificate").get("certificateId"), certificateId));
             }
             if (courseId != null) {

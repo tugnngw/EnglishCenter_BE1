@@ -1,0 +1,14 @@
+# TOEIC Speaking (TOEIC Speaking & Writing) - đề mẫu để test (không phải đề thật)
+# Học viên bấm ghi âm và nói; bản phiên âm được gửi cho AI chấm cùng tiêu chí trong [INSTRUCTIONS].
+
+[SECTION] SPEAKING | TOEIC Speaking - Read a text aloud
+[INSTRUCTIONS] Read the text aloud (45 seconds). Scoring criteria (TOEIC Speaking scale 0-200, grade from the transcript): accuracy - the transcript should match the text closely, every missing, added or wrong word lowers the score; completeness - the whole text is read. Pronunciation and intonation can only be judged from the transcript.
+1. [ESSAY] Read aloud: "Thank you for calling Greenline Travel. Our office is open from Monday to Saturday, from eight a.m. to six p.m. If you would like to book a flight, press one. For hotel reservations, press two. To speak to a customer service agent, please stay on the line." {5}
+
+[SECTION] SPEAKING | TOEIC Speaking - Respond to questions
+[INSTRUCTIONS] Imagine a marketing company is doing research in your area. You are taking part in a telephone interview about restaurants. Answer in about 30 seconds. Scoring criteria (TOEIC Speaking 0-200): relevance - answers every part of the question; fluency - complete sentences, natural flow; vocabulary and grammar - appropriate and mostly accurate. Very short or off-topic answers: at most 100.
+2. [ESSAY] How often do you eat at restaurants, and who do you usually go with? What kind of food do you usually order? {5}
+
+[SECTION] SPEAKING | TOEIC Speaking - Express an opinion
+[INSTRUCTIONS] Give your opinion and support it with reasons and examples (60 seconds). Scoring criteria (TOEIC Speaking 0-200): opinion - clear position from the start; support - at least two reasons with examples; coherence - ideas connected logically; vocabulary and grammar - range and accuracy. No clear opinion or no reasons: at most 120.
+3. [ESSAY] Some people think it is better to work for a large company, while others prefer a small company. Which do you prefer and why? {10}

@@ -1,0 +1,10 @@
+# VSTEP Writing (B1-C1) - đề mẫu để test (không phải đề thật)
+# [INSTRUCTIONS] = tiêu chí chấm, được gửi kèm đề bài cho AI khi chấm.
+
+[SECTION] WRITING | VSTEP Writing - Task 1: Letter
+[INSTRUCTIONS] You should spend about 20 minutes on this task. Write a letter of at least 120 words. Scoring criteria (VSTEP scale 0-10, step 0.5): Task fulfilment - covers all points in the prompt, correct letter format and suitable tone; Organisation - clear opening, body and closing, linked ideas; Vocabulary - appropriate range for B1-B2; Grammar - variety of structures, errors do not block meaning. Under 120 words or missing a required point: at most 5.0.
+1. [ESSAY] You received a letter from your English friend, Jack: "I'm going to visit Vietnam for two weeks next summer. Can you tell me what the weather is like then, which places I should visit, and what food I must try?" Write a reply to Jack answering his questions. Do not write your real name; sign the letter as Nam. {10}
+
+[SECTION] WRITING | VSTEP Writing - Task 2: Essay
+[INSTRUCTIONS] You should spend about 40 minutes on this task. Write an essay of at least 250 words. Scoring criteria (VSTEP scale 0-10, step 0.5): Task fulfilment - clear position, all parts of the question answered, ideas supported with reasons and examples; Organisation - introduction, body paragraphs, conclusion, coherent progression; Vocabulary - wide and accurate range for B2-C1; Grammar - complex structures used with good control. Under 250 words: at most 5.5.
+2. [ESSAY] Nowadays, many students use artificial intelligence (AI) tools to help them with their homework. What are the advantages and disadvantages of this? Use specific reasons and examples to support your answer. {20}

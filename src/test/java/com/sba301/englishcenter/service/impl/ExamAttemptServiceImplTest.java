@@ -1,7 +1,10 @@
 package com.sba301.englishcenter.service.impl;
 
 import com.sba301.englishcenter.common.enums.AttemptStatus;
+import com.sba301.englishcenter.common.enums.ExamScope;
+import com.sba301.englishcenter.common.enums.PracticeExamType;
 import com.sba301.englishcenter.common.enums.QuestionType;
+import com.sba301.englishcenter.dto.practice.CriterionScoreData;
 import com.sba301.englishcenter.dto.request.AnswerItemRequest;
 import com.sba301.englishcenter.dto.request.SaveAnswersRequest;
 import com.sba301.englishcenter.dto.response.AttemptDetailResponse;
@@ -10,6 +13,7 @@ import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamAnswer;
 import com.sba301.englishcenter.entity.ExamAttempt;
 import com.sba301.englishcenter.entity.ExamQuestion;
+import com.sba301.englishcenter.entity.ExamSection;
 import com.sba301.englishcenter.entity.Question;
 import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.exam.ExamTestData;
@@ -22,6 +26,13 @@ import com.sba301.englishcenter.repository.ExamQuestionRepository;
 import com.sba301.englishcenter.repository.ExamRepository;
 import com.sba301.englishcenter.repository.ExamSectionRepository;
 import com.sba301.englishcenter.repository.UserRepository;
+import com.sba301.englishcenter.integration.ai.AiEvaluationClient;
+import com.sba301.englishcenter.integration.ai.AiEvaluationResult;
+import com.sba301.englishcenter.integration.ai.ScoringScale;
+import com.sba301.englishcenter.repository.CertificateRepository;
+import com.sba301.englishcenter.repository.PracticeExamRepository;
+import com.sba301.englishcenter.repository.StudentProfileRepository;
+import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.security.UserPrincipal;
 import com.sba301.englishcenter.service.ExamAccessPolicy;
 import com.sba301.englishcenter.service.ExamGrader;
@@ -40,6 +51,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -53,6 +65,7 @@ import static com.sba301.englishcenter.exam.ExamTestData.question;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -73,6 +86,8 @@ class ExamAttemptServiceImplTest {
     @Mock private ExamAnswerRepository answerRepository;
     @Mock private UserRepository userRepository;
     @Mock private SessionEnrollmentChecker enrollmentChecker;
+    @Mock private AiEvaluationClient aiEvaluationClient;
+    @Mock private ScoringScaleResolver scoringScaleResolver;
 
     private ExamAttemptServiceImpl service;
 
@@ -89,7 +104,11 @@ class ExamAttemptServiceImplTest {
         ExamGrader grader = new ExamGrader();
         ExamAccessPolicy policy = new ExamAccessPolicy(enrollmentChecker);
         service = new ExamAttemptServiceImpl(examRepository, sectionRepository, examQuestionRepository,
-                attemptRepository, answerRepository, userRepository, policy, grader, new ExamMapper(grader));
+                attemptRepository, answerRepository, userRepository, policy, grader, new ExamMapper(grader),
+                mock(StudentProfileRepository.class), mock(PracticeExamRepository.class),
+                mock(CertificateRepository.class), aiEvaluationClient, scoringScaleResolver,
+                mock(NotificationService.class), new PracticeLevelCalculator(scoringScaleResolver, grader),
+                mock(PlatformTransactionManager.class));
         ReflectionTestUtils.setField(service, "entityManager", mock(EntityManager.class, Answers.RETURNS_DEEP_STUBS));
 
         student = ExamTestData.user(studentId);
@@ -332,5 +351,69 @@ class ExamAttemptServiceImplTest {
 
         assertThat(closed).isEqualTo(1);
         assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.EXPIRED);
+    }
+
+    // ------------------------------------------------------------------ AI chấm (đề luyện tập)
+
+    /** Đề có thêm 1 câu tự luận 9 điểm trong section Speaking; bài đã nộp, câu tự luận đã làm. */
+    private ExamAttempt givenSubmittedSpeakingEssay() {
+        ExamSection speaking = ExamSection.builder().sectionId(UUID.randomUUID()).exam(exam)
+                .sectionType("SPEAKING").title("Speaking").build();
+        Question essay = question(QuestionType.ESSAY, "9");
+        ExamQuestion essayQuestion = ExamTestData.examQuestion(exam, essay, 3);
+        essayQuestion.setSection(speaking);
+        List<ExamQuestion> withEssay = new ArrayList<>(examQuestions);
+        withEssay.add(essayQuestion);
+        when(examQuestionRepository.findDetailedByExamId(exam.getExamId())).thenReturn(withEssay);
+
+        ExamAttempt attempt = givenAttempt(LocalDateTime.now().minusMinutes(5), LocalDateTime.now().plusMinutes(25));
+        attempt.setStatus(AttemptStatus.SUBMITTED);
+        answerStore.add(ExamTestData.answer(attempt, essay, null, "My hometown is a small city near the sea."));
+        return attempt;
+    }
+
+    @Test
+    void aiGrade_practiceSpeakingEssayScoredOnTargetScale() {
+        exam.setExamScope(ExamScope.PRACTICE);
+        ExamAttempt attempt = givenSubmittedSpeakingEssay();
+        when(scoringScaleResolver.resolve(studentId, PracticeExamType.SPEAKING)).thenReturn(ScoringScale.IELTS);
+        when(scoringScaleResolver.resolve(eq(studentId), any(String.class))).thenReturn(ScoringScale.IELTS);
+        when(scoringScaleResolver.resolve(studentId, (String) null)).thenReturn(ScoringScale.IELTS);
+        CriterionScoreData criterion = new CriterionScoreData(new BigDecimal("6.0"), "Khá");
+        when(aiEvaluationClient.evaluate(eq(PracticeExamType.SPEAKING), any(), any(), eq(ScoringScale.IELTS)))
+                .thenReturn(new AiEvaluationResult(new BigDecimal("6.0"), criterion, criterion, criterion, criterion,
+                        "Bài nói khá tốt", List.of("Luyện phát âm"), "claude-test", "{}", "B2"));
+
+        AttemptResultResponse result = service.aiGradeAttempt(attempt.getAttemptId());
+
+        ExamAnswer graded = answerStore.get(0);
+        // 9 điểm * (6.0 - 0) / (9 - 0) = 6.00
+        assertThat(graded.getManualScore()).isEqualByComparingTo("6.00");
+        assertThat(graded.getAiEvaluation()).contains("\"skill\":\"SPEAKING\"").contains("\"cefrLevel\":\"B2\"");
+        assertThat(attempt.getStatus()).isEqualTo(AttemptStatus.GRADED);
+        assertThat(result.getAnswers()).anySatisfy(a -> assertThat(a.getAiEvaluation()).isNotNull());
+        // Reading (2 câu bỏ trống) = 0 band, Speaking = 6.0 band → trung bình 3.0, CEFR A2
+        assertThat(result.getPracticeLevel().getOverallScore()).isEqualByComparingTo("3.0");
+        assertThat(result.getPracticeLevel().getCefrLevel()).isEqualTo("A2");
+        assertThat(result.getPracticeLevel().getSkills()).extracting(s -> s.getSkill())
+                .containsExactly("SPEAKING", "OTHER");
+    }
+
+    @Test
+    void aiGrade_onlyForPracticeExams() {
+        ExamAttempt attempt = givenSubmittedSpeakingEssay();
+
+        assertThatThrownBy(() -> service.aiGradeAttempt(attempt.getAttemptId()))
+                .satisfies(ex -> assertThat(errorOf(ex)).isEqualTo(ErrorCode.INVALID_EXAM_SCOPE));
+        verify(aiEvaluationClient, never()).evaluate(any(), any(), any(), any());
+    }
+
+    @Test
+    void bandToPoints_mapsTargetScaleToQuestionPoints() {
+        ScoringScale toeicWriting = new ScoringScale("TOEIC", BigDecimal.ZERO, new BigDecimal("200"), BigDecimal.TEN);
+        assertThat(ExamAttemptServiceImpl.bandToPoints(new BigDecimal("150"), toeicWriting, new BigDecimal("4")))
+                .isEqualByComparingTo("3.00");
+        assertThat(ExamAttemptServiceImpl.bandToPoints(new BigDecimal("9.0"), ScoringScale.IELTS, BigDecimal.ONE))
+                .isEqualByComparingTo("1.00");
     }
 }

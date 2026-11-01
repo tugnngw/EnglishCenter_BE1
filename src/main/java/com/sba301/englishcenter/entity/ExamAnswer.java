@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -78,6 +79,11 @@ public class ExamAnswer {
 
     @Column(name = "mentor_feedback", columnDefinition = "TEXT")
     private String mentorFeedback;
+
+    /** Kết quả AI chấm câu Writing / Speaking của đề luyện tập (JSON của {@code EssayAiEvaluationData}). */
+    @Column(name = "ai_evaluation", columnDefinition = "jsonb")
+    @ColumnTransformer(write = "cast(? as jsonb)")
+    private String aiEvaluation;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "graded_by")

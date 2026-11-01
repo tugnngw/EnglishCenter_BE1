@@ -99,7 +99,7 @@ class PracticeExamControllerTest {
     }
 
     @Test
-    @DisplayName("Chưa cấu hình Gemini -> 503 mã 6027")
+    @DisplayName("Chưa cấu hình AI -> 503 mã 6027")
     void aiNotConfigured() throws Exception {
         UUID answerId = UUID.randomUUID();
         when(practiceExamService.evaluate(userId, answerId)).thenThrow(new AppException(ErrorCode.AI_NOT_CONFIGURED));

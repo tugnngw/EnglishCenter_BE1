@@ -6,7 +6,7 @@ import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Phạm vi đề thi (thi thử theo chứng chỉ / thi của khóa học) - ánh xạ trực tiếp với PostgreSQL native enum {@code exam_scope_enum}.
+ * Phạm vi đề thi (thi thử theo chứng chỉ / thi của khóa học / luyện tập AI) - ánh xạ trực tiếp với PostgreSQL native enum {@code exam_scope_enum}.
  * Hằng số Java viết chữ thường đúng như nhãn trong DB (xem {@code CourseStatus}); các alias VIẾT HOA
  * chỉ để code dễ đọc.
  */
@@ -15,10 +15,13 @@ import lombok.RequiredArgsConstructor;
 public enum ExamScope {
 
     trial("trial"),
-    course("course");
+    course("course"),
+    /** Đề luyện tập AI nhiều kỹ năng: Reading / Listening tự chấm theo đáp án, Writing / Speaking do AI chấm. */
+    practice("practice");
 
     public static final ExamScope TRIAL = trial;
     public static final ExamScope COURSE = course;
+    public static final ExamScope PRACTICE = practice;
 
     @JsonValue
     private final String value;

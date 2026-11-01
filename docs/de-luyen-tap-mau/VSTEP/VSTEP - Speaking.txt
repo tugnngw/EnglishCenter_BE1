@@ -1,0 +1,14 @@
+# VSTEP Speaking (B1-C1) - đề mẫu để test (không phải đề thật)
+# Học viên bấm ghi âm và nói; bản phiên âm được gửi cho AI chấm cùng tiêu chí trong [INSTRUCTIONS].
+
+[SECTION] SPEAKING | VSTEP Speaking - Part 1: Social interaction
+[INSTRUCTIONS] Answer the questions about yourself (about 3 minutes in total). Scoring criteria (VSTEP scale 0-10, step 0.5, grade from the transcript): Grammar - range and accuracy; Vocabulary - appropriate and varied; Fluency and coherence - extended answers with reasons; Task fulfilment - answers every question. Very short answers: at most 4.0.
+1. [ESSAY] Let's talk about your free time. What do you usually do in your free time? Do you prefer spending free time alone or with friends? Why? {5}
+
+[SECTION] SPEAKING | VSTEP Speaking - Part 2: Solution discussion
+[INSTRUCTIONS] You have 1 minute to prepare and 2 minutes to speak. Choose ONE option, explain why it is the best and why the others are not as good. Scoring criteria (VSTEP 0-10): Task fulfilment - chooses one option and compares it with the others; Organisation - clear reasons in logical order; Vocabulary and grammar - range and accuracy. Not comparing options: at most 5.0.
+2. [ESSAY] Situation: Your class is planning a trip at the end of the semester. Three options are suggested: a trip to the beach, a visit to a historical museum, or a camping trip in the mountains. Which option do you think is the best? {10}
+
+[SECTION] SPEAKING | VSTEP Speaking - Part 3: Topic development
+[INSTRUCTIONS] You have 1 minute to prepare and 3 minutes to speak. Develop the topic using the ideas given and your own ideas. Scoring criteria (VSTEP 0-10): Task fulfilment - develops the topic fully with examples; Organisation - introduction, main ideas, conclusion; Vocabulary - topic-specific and varied; Grammar - complex structures with good control.
+3. [ESSAY] Topic: Reading books brings many benefits to young people. Ideas: improving knowledge, reducing stress, developing imagination, and your own ideas. {10}

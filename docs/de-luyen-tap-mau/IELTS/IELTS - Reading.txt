@@ -1,0 +1,46 @@
+# IELTS Reading - đề mẫu để test (không phải đề thật)
+
+[SECTION] READING | IELTS Reading - Passage 1
+[INSTRUCTIONS] Read the passage and answer Questions 1-9.
+[PASSAGE] Gardens in the Sky
+In many crowded cities, flat roofs are one of the last unused spaces. Over the past twenty years, architects and local governments have started to turn these roofs into gardens. The idea is not new: people in ancient Babylon are said to have grown plants on raised terraces. However, modern rooftop gardens use light soil, waterproof layers and smart irrigation systems that make them much easier to build.
+Supporters say rooftop gardens bring several benefits. Plants absorb heat from the sun, so buildings with green roofs stay cooler in summer. A study in Toronto found that a green roof reduced the temperature of the roof surface by up to 30 degrees Celsius on hot days. Green roofs also hold rainwater, which reduces the risk of flooding in streets after heavy storms. In addition, they provide homes for birds, bees and butterflies that have lost their natural habitat.
+There are also social benefits. In Singapore and New York, some rooftop gardens are used by residents to grow vegetables, and neighbours who had never spoken before now meet every weekend to share the harvest. Schools use their roofs as outdoor classrooms where children learn about food and nature.
+Nevertheless, rooftop gardens are not suitable for every building. Older roofs may not be strong enough to carry the extra weight of soil and water, and checking the structure can be expensive. Maintenance is another problem: plants need regular care, and if nobody is responsible, the garden can quickly die. For this reason, several cities now offer tax reductions to building owners who agree to look after a green roof for at least ten years.
+1. Rooftop gardens were first invented in the last twenty years.
+A. True
+*B. False
+C. Not Given
+[EXPLAIN] The idea is not new: ancient Babylon is mentioned.
+2. Green roofs can make buildings cooler in hot weather.
+*A. True
+B. False
+C. Not Given
+3. The Toronto study measured the temperature inside apartments.
+A. True
+*B. False
+C. Not Given
+[EXPLAIN] It measured the temperature of the roof surface.
+4. Rooftop gardens in Singapore are larger than those in New York.
+A. True
+B. False
+*C. Not Given
+5. According to the passage, green roofs help to reduce
+A. air pollution.
+*B. flooding after storms.
+C. noise from traffic.
+D. electricity prices.
+6. What social benefit is mentioned in the passage?
+A. Residents earn money by selling vegetables.
+*B. Neighbours get to know each other.
+C. Children spend less time on screens.
+D. Older people feel less lonely.
+7. Why are rooftop gardens not suitable for some older buildings?
+A. They are too tall.
+B. They do not get enough sunlight.
+*C. Their roofs may not support the extra weight.
+D. They are protected by law.
+8. [FILL] Without regular ___, a rooftop garden can quickly die.
+= care | maintenance
+9. [FILL] Some cities give building owners a tax ___ if they look after a green roof.
+= reduction | reductions | cut

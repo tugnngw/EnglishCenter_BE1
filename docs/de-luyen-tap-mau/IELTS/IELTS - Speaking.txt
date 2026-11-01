@@ -1,0 +1,14 @@
+# IELTS Speaking - đề mẫu để test (không phải đề thật)
+# Học viên bấm ghi âm và nói; bản phiên âm được gửi cho AI chấm cùng tiêu chí trong [INSTRUCTIONS].
+
+[SECTION] SPEAKING | IELTS Speaking - Part 1
+[INSTRUCTIONS] Answer the examiner's questions about yourself in 30-60 seconds. Scoring criteria (IELTS band 0-9, step 0.5; grade from the transcript): Fluency and Coherence - speaks at length without long pauses, answers extended with reasons; Lexical Resource - flexible everyday vocabulary, some less common words; Grammatical Range and Accuracy - mix of simple and complex sentences, mostly accurate; Pronunciation - judge only what the transcript shows (word choice, recognisable words). One-word or very short answers: at most band 4.
+1. [ESSAY] Let's talk about your hometown. Where is your hometown? What do you like most about it? Has it changed much in recent years? {5}
+
+[SECTION] SPEAKING | IELTS Speaking - Part 2
+[INSTRUCTIONS] Speak for 1-2 minutes about the topic on the card. Scoring criteria (IELTS band 0-9): Fluency and Coherence - covers all points on the card in a logical order, keeps talking for the full time; Lexical Resource - descriptive vocabulary, idiomatic expressions; Grammatical Range and Accuracy - past tenses used correctly when telling a story, complex sentences; Pronunciation - judged from the transcript only. Covering fewer than 2 points of the card: at most band 5.
+2. [ESSAY] Describe a book that you enjoyed reading. You should say: what the book was, when you read it, what it was about, and explain why you enjoyed it. {10}
+
+[SECTION] SPEAKING | IELTS Speaking - Part 3
+[INSTRUCTIONS] Discuss the questions in more depth (about 1 minute each). Scoring criteria (IELTS band 0-9): Fluency and Coherence - develops abstract ideas, compares and speculates; Lexical Resource - vocabulary for opinions and general topics; Grammatical Range and Accuracy - conditionals, comparisons, complex sentences; Pronunciation - judged from the transcript only.
+3. [ESSAY] Do you think people read less now than in the past? Why? How might technology change the way children learn to read in the future? {10}

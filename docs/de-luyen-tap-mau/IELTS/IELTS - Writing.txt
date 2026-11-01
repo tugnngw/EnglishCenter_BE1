@@ -1,0 +1,7 @@
+# IELTS Writing - đề mẫu để test (không phải đề thật)
+# Chỉ có Task 2 (Task 1 cần biểu đồ / hình ảnh nên bỏ).
+# [INSTRUCTIONS] = tiêu chí chấm, được gửi kèm đề bài cho AI khi chấm (học viên cũng xem được).
+
+[SECTION] WRITING | IELTS Writing - Task 2
+[INSTRUCTIONS] You should spend about 40 minutes on this task. Write at least 250 words. Scoring criteria (IELTS band 0-9, step 0.5): Task Response - answers every part of the question, clear position throughout, ideas extended and supported with examples; Coherence and Cohesion - one main idea per paragraph, clear progression, cohesive devices used naturally (not mechanically); Lexical Resource - wide range of topic vocabulary, collocations, few spelling errors; Grammatical Range and Accuracy - wide range of structures, most sentences error-free. Under 250 words or off-topic: Task Response at most band 5.
+1. [ESSAY] Some people believe that university students should study whatever they like. Others believe that they should only be allowed to study subjects that will be useful in the future, such as science and technology. Discuss both these views and give your own opinion. Give reasons for your answer and include any relevant examples from your own knowledge or experience. {20}

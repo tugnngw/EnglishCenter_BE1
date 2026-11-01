@@ -95,7 +95,7 @@ class LearningPathPracticeIntegrationTest {
     void aiReturns(String band) {
         var c = new CriterionScoreData(new BigDecimal(band), "ok");
         when(ai.evaluate(any(), any(), any(), any())).thenReturn(new AiEvaluationResult(new BigDecimal(band), c, c, c, c,
-                "Nhận xét", List.of("Gợi ý 1"), "gemini-test", "{}", "B2"));
+                "Nhận xét", List.of("Gợi ý 1"), "claude-test", "{}", "B2"));
     }
 
     int notifications(UUID user) {

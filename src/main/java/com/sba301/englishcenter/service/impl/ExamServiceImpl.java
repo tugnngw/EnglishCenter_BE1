@@ -304,6 +304,13 @@ public class ExamServiceImpl implements ExamService {
                     ? certificateRepository.findById(certificateId)
                     .orElseThrow(() -> new AppException(ErrorCode.CERTIFICATE_NOT_FOUND))
                     : course.getCertificate());
+        } else if (scope == ExamScope.PRACTICE) {
+            // Đề luyện tập AI: gắn chứng chỉ không bắt buộc (không gắn = dùng cho mọi mục tiêu), không thuộc khóa học
+            exam.setCertificate(certificateId != null
+                    ? certificateRepository.findById(certificateId)
+                    .orElseThrow(() -> new AppException(ErrorCode.CERTIFICATE_NOT_FOUND))
+                    : null);
+            exam.setCourse(null);
         } else {
             throw new AppException(ErrorCode.INVALID_EXAM_SCOPE);
         }

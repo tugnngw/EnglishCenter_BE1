@@ -4,8 +4,11 @@ import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.AttemptStatus;
 import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.ExamType;
+import com.sba301.englishcenter.common.enums.NotificationType;
+import com.sba301.englishcenter.common.enums.PracticeExamType;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.common.enums.RoleName;
+import com.sba301.englishcenter.dto.practice.EssayAiEvaluationData;
 import com.sba301.englishcenter.dto.practice.PracticeAnswerData;
 import com.sba301.englishcenter.dto.request.AnswerItemRequest;
 import com.sba301.englishcenter.dto.request.SaveAnswersRequest;
@@ -14,17 +17,22 @@ import com.sba301.englishcenter.dto.response.AttemptDetailResponse;
 import com.sba301.englishcenter.dto.response.AttemptResultResponse;
 import com.sba301.englishcenter.dto.response.AttemptSummaryResponse;
 import com.sba301.englishcenter.dto.response.ExamDetailResponse;
+import com.sba301.englishcenter.dto.response.PracticeLevelResponse;
 import com.sba301.englishcenter.entity.Certificate;
 import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamAnswer;
 import com.sba301.englishcenter.entity.ExamAttempt;
 import com.sba301.englishcenter.entity.ExamQuestion;
+import com.sba301.englishcenter.entity.ExamSection;
 import com.sba301.englishcenter.entity.Question;
 import com.sba301.englishcenter.entity.QuestionOption;
 import com.sba301.englishcenter.entity.StudentProfile;
 import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
+import com.sba301.englishcenter.integration.ai.AiEvaluationClient;
+import com.sba301.englishcenter.integration.ai.AiEvaluationResult;
+import com.sba301.englishcenter.integration.ai.ScoringScale;
 import com.sba301.englishcenter.repository.CertificateRepository;
 import com.sba301.englishcenter.repository.ExamAnswerRepository;
 import com.sba301.englishcenter.repository.ExamAttemptRepository;
@@ -39,6 +47,7 @@ import com.sba301.englishcenter.service.ExamAccessPolicy;
 import com.sba301.englishcenter.service.ExamAttemptService;
 import com.sba301.englishcenter.service.ExamGrader;
 import com.sba301.englishcenter.service.ExamMapper;
+import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.util.JsonUtil;
 import com.sba301.englishcenter.util.JsonbMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -52,12 +61,16 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -104,6 +117,12 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     private final StudentProfileRepository studentProfileRepository;
     private final PracticeExamRepository practiceExamRepository;
     private final CertificateRepository certificateRepository;
+    private final AiEvaluationClient aiEvaluationClient;
+    private final ScoringScaleResolver scoringScaleResolver;
+    private final NotificationService notificationService;
+    private final PracticeLevelCalculator practiceLevelCalculator;
+    // AI chấm mất 10 - 60 giây mỗi câu: không giữ transaction / khóa dòng trong lúc chờ AI
+    private final PlatformTransactionManager transactionManager;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -233,7 +252,8 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
         FinalizeResult result = finalizeAttempt(attempt, false, now);
         log.info("Học viên nộp lượt thi {}: {}/{} điểm, trạng thái {}", attemptId, attempt.getScore(),
                 attempt.getMaxScore(), attempt.getStatus());
-        return examMapper.toResult(attempt, result.examQuestions(), result.answers(), false);
+        return withPracticeLevel(examMapper.toResult(attempt, result.examQuestions(), result.answers(), false),
+                attempt, result.examQuestions(), result.answers());
     }
 
     // ============================================
@@ -243,10 +263,18 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     @Override
     @Transactional(readOnly = true)
     public PageResponse<AttemptSummaryResponse> getMyAttempts(UUID examId, Pageable pageable) {
+        return getMyAttempts(examId, null, pageable);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<AttemptSummaryResponse> getMyAttempts(UUID examId, ExamScope examScope, Pageable pageable) {
         UUID studentId = currentUserId();
-        Page<ExamAttempt> page = examId == null
-                ? attemptRepository.findByStudent_UserId(studentId, pageable)
-                : attemptRepository.findByStudent_UserIdAndExam_ExamId(studentId, examId, pageable);
+        Page<ExamAttempt> page = examId != null
+                ? attemptRepository.findByStudent_UserIdAndExam_ExamId(studentId, examId, pageable)
+                : examScope != null
+                ? attemptRepository.findByStudent_UserIdAndExam_ExamScope(studentId, examScope, pageable)
+                : attemptRepository.findByStudent_UserId(studentId, pageable);
 
         return PageResponse.<AttemptSummaryResponse>builder()
                 .currentPage(page.getNumber())
@@ -275,7 +303,9 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
             }
         }
         List<ExamQuestion> examQuestions = examQuestionRepository.findDetailedByExamId(attempt.getExam().getExamId());
-        return examMapper.toResult(attempt, examQuestions, answersByQuestion(attemptId), false);
+        Map<UUID, ExamAnswer> answers = answersByQuestion(attemptId);
+        return withPracticeLevel(examMapper.toResult(attempt, examQuestions, answers, false),
+                attempt, examQuestions, answers);
     }
 
     // ============================================
@@ -306,6 +336,149 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
             log.info("Đã tự nộp {} lượt thi quá hạn", closed);
         }
         return closed;
+    }
+
+    // ============================================
+    // AI CHẤM WRITING / SPEAKING (đề luyện tập)
+    // ============================================
+
+    /** Một câu Writing / Speaking đã làm nhưng chưa có điểm. */
+    private record EssayTask(UUID questionId, PracticeExamType skill, String question, String answer) {
+    }
+
+    private record EssayGrade(EssayTask task, ScoringScale scale, AiEvaluationResult result) {
+    }
+
+    @Override
+    public AttemptResultResponse aiGradeAttempt(UUID attemptId) {
+        UUID studentId = currentUserId();
+        TransactionTemplate tx = new TransactionTemplate(transactionManager);
+
+        // 1. Đọc các câu cần chấm (transaction ngắn)
+        List<EssayTask> tasks = tx.execute(status -> {
+            ExamAttempt attempt = findOwnedAttempt(attemptId, false);
+            if (attempt.getExam().getExamScope() != ExamScope.PRACTICE) {
+                throw new AppException(ErrorCode.INVALID_EXAM_SCOPE, "Chỉ đề luyện tập mới được AI chấm");
+            }
+            if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) {
+                throw new AppException(ErrorCode.ATTEMPT_NOT_SUBMITTED);
+            }
+            return pendingEssayTasks(attempt);
+        });
+
+        // 2. Gọi AI ngoài transaction, theo thang của chứng chỉ mục tiêu; lỗi giữa chừng vẫn lưu các câu đã chấm
+        List<EssayGrade> grades = new ArrayList<>();
+        AppException failure = null;
+        for (EssayTask task : tasks) {
+            ScoringScale scale = scoringScaleResolver.resolve(studentId, task.skill());
+            try {
+                grades.add(new EssayGrade(task, scale,
+                        aiEvaluationClient.evaluate(task.skill(), task.question(), task.answer(), scale)));
+            } catch (AppException ex) {
+                failure = ex;
+                break;
+            }
+        }
+
+        // 3. Ghi điểm và tính lại tổng (khóa dòng attempt)
+        AttemptResultResponse result = tx.execute(status -> saveAiGrades(attemptId, studentId, grades));
+        if (failure != null) {
+            throw failure;
+        }
+        return result;
+    }
+
+    private List<EssayTask> pendingEssayTasks(ExamAttempt attempt) {
+        Map<UUID, ExamAnswer> answers = answersByQuestion(attempt.getAttemptId());
+        List<EssayTask> tasks = new ArrayList<>();
+        for (ExamQuestion eq : examQuestionRepository.findDetailedByExamId(attempt.getExam().getExamId())) {
+            Question question = eq.getQuestion();
+            ExamAnswer answer = answers.get(question.getQuestionId());
+            if (!grader.isPendingManual(question, answer)) {
+                continue;
+            }
+            ExamSection section = eq.getSection();
+            String instructions = section != null && StringUtils.hasText(section.getInstructions())
+                    ? section.getInstructions().trim() + "\n" : "";
+            tasks.add(new EssayTask(question.getQuestionId(),
+                    isSpeaking(section) ? PracticeExamType.SPEAKING : PracticeExamType.WRITING,
+                    instructions + question.getQuestionText(), answer.getAnswerText()));
+        }
+        return tasks;
+    }
+
+    private static boolean isSpeaking(ExamSection section) {
+        return section != null && ((section.getSectionType() != null && section.getSectionType().toUpperCase().contains("SPEAK"))
+                || (section.getTitle() != null && section.getTitle().toUpperCase().contains("SPEAK")));
+    }
+
+    private AttemptResultResponse saveAiGrades(UUID attemptId, UUID studentId, List<EssayGrade> grades) {
+        LocalDateTime now = LocalDateTime.now();
+        ExamAttempt attempt = findOwnedAttempt(attemptId, true);
+        Exam exam = attempt.getExam();
+        List<ExamQuestion> examQuestions = examQuestionRepository.findDetailedByExamId(exam.getExamId());
+        Map<UUID, ExamAnswer> answers = answersByQuestion(attemptId);
+
+        int saved = 0;
+        for (EssayGrade grade : grades) {
+            ExamAnswer answer = answers.get(grade.task().questionId());
+            // Request khác đã chấm câu này trước -> giữ kết quả đó
+            if (answer == null || answer.getManualScore() != null) {
+                continue;
+            }
+            AiEvaluationResult r = grade.result();
+            ScoringScale scale = grade.scale();
+            answer.setManualScore(bandToPoints(r.bandScore(), scale, ExamGrader.points(answer.getQuestion())));
+            answer.setMentorFeedback(r.feedback());
+            answer.setAiEvaluation(JsonbMapper.write(new EssayAiEvaluationData(grade.task().skill().name(),
+                    r.bandScore(), r.cefrLevel(), scale.certificateName(), scale.minScore(), scale.maxScore(),
+                    r.taskAchievement(), r.coherenceCohesion(), r.lexicalResource(), r.grammaticalAccuracy(),
+                    r.feedback(), r.suggestions(), r.model(), now)));
+            answer.setGradedDate(now);
+            saved++;
+        }
+
+        ExamGrader.Summary summary = grader.grade(attempt, examQuestions, answers, exam.getPassingScore());
+        answerRepository.saveAll(answers.values());
+        if (!summary.pendingManual() && attempt.getStatus() == AttemptStatus.SUBMITTED) {
+            attempt.setStatus(AttemptStatus.GRADED);
+        }
+        attemptRepository.save(attempt);
+        exam.setAverageScore(attemptRepository.averageScoreByExamId(exam.getExamId(), FINISHED_STATUSES)
+                .setScale(2, RoundingMode.HALF_UP));
+        examRepository.save(exam);
+
+        if (saved > 0 && !summary.pendingManual()) {
+            updateStudentProfileOnAttemptCompletion(attempt, summary, examQuestions, answers);
+            notificationService.notify(studentId, NotificationType.exam_result, "AI đã chấm xong bài luyện tập",
+                    "Bài \"" + exam.getExamTitle() + "\" đạt " + summary.score().toPlainString() + "/"
+                            + summary.maxScore().toPlainString() + " điểm (" + summary.percentage().toPlainString() + "%).");
+        }
+        log.info("AI chấm {} câu Writing/Speaking của lượt thi {} (còn chờ chấm: {})", saved, attemptId,
+                summary.pendingManual());
+        return withPracticeLevel(examMapper.toResult(attempt, examQuestions, answers, false),
+                attempt, examQuestions, answers);
+    }
+
+    /** Đề luyện tập đã chấm xong: kèm band / CEFR theo chứng chỉ mục tiêu (giống giá trị lưu vào hồ sơ). */
+    private AttemptResultResponse withPracticeLevel(AttemptResultResponse response, ExamAttempt attempt,
+                                                    List<ExamQuestion> examQuestions, Map<UUID, ExamAnswer> answers) {
+        if (attempt.getExam().getExamScope() == ExamScope.PRACTICE) {
+            response.setPracticeLevel(practiceLevelCalculator.calculate(attempt.getStudent().getUserId(),
+                    examQuestions, answers));
+        }
+        return response;
+    }
+
+    /** Band theo thang chứng chỉ -> điểm của câu: points * (band - min) / (max - min). */
+    static BigDecimal bandToPoints(BigDecimal band, ScoringScale scale, BigDecimal points) {
+        BigDecimal range = scale.maxScore().subtract(scale.minScore());
+        if (band == null || range.signum() <= 0) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal ratio = band.subtract(scale.minScore()).divide(range, 6, RoundingMode.HALF_UP)
+                .max(BigDecimal.ZERO).min(BigDecimal.ONE);
+        return points.multiply(ratio).setScale(2, RoundingMode.HALF_UP);
     }
 
     // ============================================
@@ -343,8 +516,9 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
         examRepository.save(exam);
 
         // TASK-DEV1 T7: Cập nhật current_level và current_score vào StudentProfile khi hoàn thành placement_test / trial
-        if (!summary.pendingManual() && (exam.getExamType() == ExamType.placement_test || exam.getExamScope() == ExamScope.trial)) {
-            updateStudentProfileOnAttemptCompletion(attempt, summary);
+        if (!summary.pendingManual() && (exam.getExamType() == ExamType.placement_test
+                || exam.getExamScope() == ExamScope.TRIAL || exam.getExamScope() == ExamScope.PRACTICE)) {
+            updateStudentProfileOnAttemptCompletion(attempt, summary, examQuestions, answers);
         }
 
         if (auto) {
@@ -502,13 +676,29 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
         }
     }
 
-    private void updateStudentProfileOnAttemptCompletion(ExamAttempt attempt, ExamGrader.Summary summary) {
+    private void updateStudentProfileOnAttemptCompletion(ExamAttempt attempt, ExamGrader.Summary summary,
+                                                         List<ExamQuestion> examQuestions,
+                                                         Map<UUID, ExamAnswer> answers) {
         if (summary.score() == null || summary.maxScore() == null || summary.maxScore().compareTo(BigDecimal.ZERO) <= 0) {
             return;
         }
         UUID studentId = attempt.getStudent().getUserId();
         StudentProfile profile = studentProfileRepository.findById(studentId)
                 .orElseGet(() -> StudentProfile.builder().user(userRepository.getReferenceById(studentId)).build());
+
+        // Đề luyện tập: lưu đúng band / CEFR hiển thị ở trang kết quả (theo từng kỹ năng, thang chứng chỉ mục tiêu)
+        if (attempt.getExam().getExamScope() == ExamScope.PRACTICE) {
+            PracticeLevelResponse level = practiceLevelCalculator.calculate(studentId, examQuestions, answers);
+            if (level != null) {
+                profile.setCurrentLevel(level.getCefrLevel());
+                profile.setCurrentScore(level.getOverallScore());
+                profile.setLastUpdated(LocalDateTime.now());
+                studentProfileRepository.save(profile);
+                log.info("Updated student profile for {} from practice: level={}, score={}", studentId,
+                        level.getCefrLevel(), level.getOverallScore());
+                return;
+            }
+        }
 
         BigDecimal percentage = summary.percentage();
         if (percentage == null) {

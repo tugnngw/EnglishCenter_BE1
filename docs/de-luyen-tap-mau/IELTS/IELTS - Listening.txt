@@ -1,0 +1,40 @@
+# IELTS Listening - đề mẫu để test (không phải đề thật)
+# File nghe: /audio/practice/ielts-listening.mp3 (đặt trong FE_EnglishCenter/public/audio/practice)
+
+[SECTION] LISTENING | IELTS Listening - Part 1
+[INSTRUCTIONS] Complete the form. Write ONE WORD AND/OR A NUMBER for each answer.
+[AUDIO] /audio/practice/ielts-listening.mp3
+1. [FILL] Customer surname: ___
+= Miller
+[EXPLAIN] The caller spells his name: M-I-L-L-E-R.
+2. [FILL] Type of membership chosen: ___
+= standard
+[EXPLAIN] "The standard one, please."
+3. [FILL] Monthly fee: £___
+= 45 | forty-five | £45
+[EXPLAIN] "The standard membership costs forty-five pounds a month."
+4. [FILL] Yoga classes are on ___ evenings.
+= Thursday
+5. [FILL] Bring a ___ for the membership card.
+= photo | photograph
+
+[SECTION] LISTENING | IELTS Listening - Part 2
+[INSTRUCTIONS] Use the same recording as Part 1. Choose the correct letter, A, B or C.
+6. How long does the walking tour last?
+A. One hour
+*B. Two hours
+C. Three hours
+[EXPLAIN] "The tour lasts about two hours."
+7. Why can't visitors climb the clock tower today?
+A. It is too old to be safe.
+*B. The stairs are being repaired.
+C. It is closed on weekends.
+8. What closes at four o'clock?
+A. The museum
+*B. The café in the museum
+C. The river market
+9. The tour ticket gives visitors
+A. free entry to the museum.
+B. a free drink at the café.
+*C. a discount at shops in the market.
+[EXPLAIN] "It gives you ten percent off at any shop in the market."
