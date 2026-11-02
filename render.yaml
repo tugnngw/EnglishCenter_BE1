@@ -1,0 +1,76 @@
+services:
+  - type: web
+    name: englishcenter-api
+    runtime: docker
+    repo: https://github.com/tugnngw/EnglishCenter_BE1.git
+    branch: main
+    region: singapore
+    plan: free
+    dockerfilePath: ./Dockerfile
+    autoDeploy: false
+    envVars:
+      - key: PORT
+        value: 10000
+      - key: DB_HOST
+        fromDatabase:
+          name: englishcenter-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: englishcenter-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: englishcenter-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: englishcenter-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: englishcenter-db
+          property: password
+      - key: JWT_SIGNER_KEY
+        generateValue: true
+      - key: MAIL_USERNAME
+        sync: false
+      - key: MAIL_PASSWORD
+        sync: false
+      - key: FRONTEND_BASE_URL
+        fromService:
+          name: englishcenter-frontend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: WEBSOCKET_ALLOWED_ORIGINS
+        fromService:
+          name: englishcenter-frontend
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: SPRING_JPA_HIBERNATE_DDL_AUTO
+        value: none
+      - key: SPRING_JPA_SHOW_SQL
+        value: false
+
+  - type: web
+    name: englishcenter-frontend
+    runtime: static
+    repo: https://github.com/huyhoang007/FE_EnglishCenter.git
+    branch: main
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    autoDeploy: false
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: englishcenter-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
+
+databases:
+  - name: englishcenter-db
+    region: singapore
+    plan: free
+    postgresMajorVersion: "18"
+    databaseName: englishcenter
+    user: englishcenter_app
