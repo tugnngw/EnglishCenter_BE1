@@ -83,7 +83,7 @@ public class AuthServiceImpl implements AuthService {
             }
             userRepository.save(user);
             String rawToken = issueActivationToken(user);
-            sendActivationEmailQuietly(user, rawToken);
+            sendActivationEmail(user, rawToken);
             return toUserResponse(user);
         }
 
@@ -103,7 +103,7 @@ public class AuthServiceImpl implements AuthService {
         User savedUser = userRepository.save(user);
 
         String rawToken = issueActivationToken(savedUser);
-        sendActivationEmailQuietly(savedUser, rawToken);
+        sendActivationEmail(savedUser, rawToken);
 
         // StudentProfile không tạo ở đây; chỉ tạo khi user mua khóa và nâng cấp lên STUDENT.
         return toUserResponse(savedUser);
@@ -163,7 +163,7 @@ public class AuthServiceImpl implements AuthService {
         }
         User user = maybeUser.get();
         String rawToken = issueActivationToken(user);
-        sendActivationEmailQuietly(user, rawToken);
+        sendActivationEmail(user, rawToken);
     }
 
     @Override
@@ -392,13 +392,14 @@ public class AuthServiceImpl implements AuthService {
         return authToken;
     }
 
-    /** Gửi email kích hoạt; lỗi email không phá luồng đăng ký (log và cho qua). */
-    private void sendActivationEmailQuietly(User user, String rawToken) {
+    /** Gửi email kích hoạt; báo lỗi nếu provider từ chối để tránh báo thành công giả. */
+    private void sendActivationEmail(User user, String rawToken) {
         String link = appProperties.getFrontend().getBaseUrl() + "/activate?token=" + rawToken;
         try {
             emailService.sendAccountActivationEmail(user.getEmail(), user.getFullName(), link);
         } catch (Exception e) {
             log.warn("Failed to send activation email to {}: {}", user.getEmail(), e.getMessage());
+            throw new IllegalStateException("Không gửi được email kích hoạt. Hãy kiểm tra cấu hình dịch vụ email.", e);
         }
     }
 

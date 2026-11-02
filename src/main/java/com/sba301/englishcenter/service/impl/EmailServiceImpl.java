@@ -14,8 +14,8 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Gửi email HTML qua JavaMailSender (Gmail SMTP app password).
- * From address mặc định lấy từ spring.mail.username.
+ * Sends through SMTP. On Render Free configure Brevo SMTP on port 2525 because
+ * Render blocks the standard outbound SMTP ports 25, 465, and 587.
  */
 @Slf4j
 @Service
@@ -27,8 +27,14 @@ public class EmailServiceImpl implements EmailService {
     private final JavaMailSender mailSender;
     private final AppProperties appProperties;
 
+    @Value("${mail.from.email:}")
+    private String configuredFromAddress;
+
+    @Value("${mail.from.name:EnglishHub}")
+    private String fromName;
+
     @Value("${spring.mail.username:}")
-    private String fromAddress;
+    private String smtpUsername;
 
     @Override
     public void sendAccountActivationEmail(String toEmail, String fullName, String activationLink) {
@@ -113,13 +119,17 @@ public class EmailServiceImpl implements EmailService {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper =
                     new MimeMessageHelper(message, MimeMessageHelper.MULTIPART_MODE_MIXED, StandardCharsets.UTF_8.name());
-            helper.setFrom(fromAddress);
+            String fromAddress = configuredFromAddress.isBlank() ? smtpUsername : configuredFromAddress;
+            if (fromAddress.isBlank()) {
+                throw new IllegalStateException("Thiếu MAIL_FROM_EMAIL hoặc MAIL_USERNAME.");
+            }
+            helper.setFrom(fromAddress, fromName);
             helper.setTo(toEmail);
             helper.setSubject(subject);
             helper.setText(htmlBody, true);
             mailSender.send(message);
             log.info("Email '{}' sent to {}", subject, toEmail);
-        } catch (MessagingException e) {
+        } catch (Exception e) {
             throw new IllegalStateException("Không thể tạo email gửi " + toEmail, e);
         }
     }
