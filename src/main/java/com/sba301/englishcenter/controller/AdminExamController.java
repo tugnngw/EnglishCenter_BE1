@@ -118,6 +118,13 @@ public class AdminExamController {
         return ApiResponse.success("Đã khôi phục đề thi về nháp", examService.restoreExam(examId));
     }
 
+    @PostMapping("/exams/{examId}/clone")
+    @Operation(summary = "Clone exam", description = "Copy an exam with its sections, questions and answers into a new draft "
+            + "(questions are copied, so editing the copy does not change the original or its attempts)")
+    public ApiResponse<ExamDetailResponse> cloneExam(@PathVariable UUID examId) {
+        return ApiResponse.success("Đã nhân bản đề thi", examService.cloneExam(examId));
+    }
+
     // ============================================
     // SECTIONS (D3-03)
     // ============================================

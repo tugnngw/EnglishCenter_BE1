@@ -261,6 +261,31 @@ class ExamFlowIntegrationTest {
                 .contains(examId);
         Response restored = call(post("/api/v1/admin/exams/" + examId + "/restore"), admin, null);
         assertThat((String) restored.read("$.result.exam.status")).isEqualTo("draft");
+
+        // ---------- Đề đã có lượt thi: sửa được nội dung hiển thị, không đổi được đáp án / cấu trúc
+        Response textFix = call(put("/api/v1/admin/exams/" + examId + "/questions/" + mcId), admin, """
+                {"questionText":"Đề đã sửa chính tả","explanation":"Giải thích mới"}""");
+        assertThat(textFix.status()).as(textFix.body()).isEqualTo(200);
+        assertThat((String) textFix.read("$.result.questionText")).isEqualTo("Đề đã sửa chính tả");
+        assertThat((Integer) call(put("/api/v1/admin/exams/" + examId + "/questions/" + mcId), admin,
+                "{\"points\":5}").read("$.code")).isIn(5006, 5021);
+        assertThat(call(put("/api/v1/admin/exams/" + examId + "/sections/" + readingId), admin,
+                "{\"instructions\":\"Hướng dẫn mới\",\"audioUrl\":\"https://example.com/new.mp3\"}").status()).isEqualTo(200);
+        assertThat((Integer) call(put("/api/v1/admin/exams/" + examId + "/sections/" + readingId), admin,
+                "{\"sectionOrder\":9}").read("$.code")).isEqualTo(5006);
+
+        // ---------- Nhân bản: đề nháp mới, đủ phần thi / câu hỏi, câu được chép mới nên sửa đáp án được
+        Response clone = call(post("/api/v1/admin/exams/" + examId + "/clone"), admin, null);
+        assertThat(clone.status()).as(clone.body()).isEqualTo(200);
+        String cloneId = clone.read("$.result.exam.examId");
+        assertThat(cloneId).isNotEqualTo(examId);
+        assertThat((String) clone.read("$.result.exam.status")).isEqualTo("draft");
+        assertThat((Integer) clone.read("$.result.exam.totalQuestions"))
+                .isEqualTo((Integer) call(get("/api/v1/admin/exams/" + examId), admin, null).read("$.result.exam.totalQuestions"));
+        List<String> cloneQuestionIds = clone.read("$.result.sections[*].questions[*].questionId");
+        assertThat(cloneQuestionIds).isNotEmpty().doesNotContain(mcId, essayId);
+        assertThat(call(put("/api/v1/admin/exams/" + cloneId + "/questions/" + cloneQuestionIds.get(0)), admin,
+                "{\"points\":3}").status()).isEqualTo(200);
     }
 
     /** File init dữ liệu mẫu chạy được 2 lần (idempotent); đề course bị chặn khi chưa có enrollment. */

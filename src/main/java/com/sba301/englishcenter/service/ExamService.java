@@ -47,4 +47,7 @@ public interface ExamService {
 
     /** Khôi phục đề đã lưu trữ về nháp. */
     ExamDetailResponse restoreExam(UUID examId);
+
+    /** Nhân bản đề (kể cả phần thi, câu hỏi, đáp án) thành đề nháp mới để sửa khi đề cũ đã có lượt thi. */
+    ExamDetailResponse cloneExam(UUID examId);
 }

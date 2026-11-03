@@ -90,7 +90,15 @@ public class ExamStructureServiceImpl implements ExamStructureService {
     @Override
     @Transactional
     public ExamSectionResponse updateSection(UUID examId, UUID sectionId, UpdateExamSectionRequest request) {
-        findEditableExam(examId);
+        // Tên, hướng dẫn, đoạn đọc, file nghe chỉ là nội dung hiển thị: sửa được kể cả khi đề đã có lượt thi.
+        // Loại, thứ tự, thời lượng, phần thi của chứng chỉ ảnh hưởng cách làm / chấm bài nên vẫn cần đề nháp.
+        boolean structural = request.getSectionType() != null || request.getSectionOrder() != null
+                || request.getDurationMinutes() != null || request.getCertificatePartId() != null;
+        if (structural) {
+            findEditableExam(examId);
+        } else {
+            findExam(examId);
+        }
         ExamSection section = findSection(examId, sectionId);
 
         if (request.getTitle() != null && !request.getTitle().isBlank()) section.setTitle(request.getTitle().trim());
@@ -155,7 +163,18 @@ public class ExamStructureServiceImpl implements ExamStructureService {
     @Override
     @Transactional
     public ExamQuestionResponse updateQuestion(UUID examId, UUID questionId, UpdateExamQuestionRequest request) {
-        findEditableExam(examId);
+        // Ảnh hưởng chấm điểm / cấu trúc đề: dạng câu, điểm, đáp án, phần thi, vị trí trong đề
+        boolean scoringChanged = request.getQuestionType() != null || request.getPoints() != null
+                || request.getOptions() != null || request.getCertificatePartId() != null;
+        boolean structural = scoringChanged || Boolean.TRUE.equals(request.getRemoveFromSection())
+                || request.getSectionId() != null || request.getQuestionOrder() != null
+                || request.getTimeLimitSeconds() != null;
+        // Chỉ sửa nội dung hiển thị (chữ, giải thích, audio, ảnh, chủ đề, độ khó) thì được làm cả khi đề đã có lượt thi
+        if (structural) {
+            findEditableExam(examId);
+        } else {
+            findExam(examId);
+        }
         ExamQuestion examQuestion = examQuestionRepository.findDetailedByExamIdAndQuestionId(examId, questionId)
                 .orElseThrow(() -> new AppException(ErrorCode.QUESTION_NOT_FOUND));
         Question question = examQuestion.getQuestion();
@@ -167,9 +186,10 @@ public class ExamStructureServiceImpl implements ExamStructureService {
                 || request.getCertificatePartId() != null || request.getOptions() != null;
 
         if (contentChanged) {
-            // Câu đã có người trả lời: sửa đáp án sẽ làm sai lệch kết quả cũ
-            if (answerRepository.existsByQuestion_QuestionId(questionId)) {
-                throw new AppException(ErrorCode.QUESTION_IN_USE);
+            // Câu đã có người trả lời: đổi đáp án / điểm / dạng câu sẽ làm sai lệch kết quả cũ
+            if (scoringChanged && answerRepository.existsByQuestion_QuestionId(questionId)) {
+                throw new AppException(ErrorCode.QUESTION_IN_USE,
+                        "Câu đã có học viên trả lời: chỉ sửa được nội dung hiển thị (chữ, giải thích, audio, ảnh)");
             }
             // Câu dùng chung với đề khác: sửa ở đây sẽ đổi luôn đề kia
             if (examQuestionRepository.existsByQuestion_QuestionIdAndExam_ExamIdNot(questionId, examId)) {
@@ -334,6 +354,10 @@ public class ExamStructureServiceImpl implements ExamStructureService {
         exam.setTotalQuestions((int) examQuestionRepository.countByExam_ExamId(exam.getExamId()));
         exam.setTotalParts((int) sectionRepository.countByExam_ExamId(exam.getExamId()));
         examRepository.save(exam);
+    }
+
+    private Exam findExam(UUID examId) {
+        return examRepository.findById(examId).orElseThrow(() -> new AppException(ErrorCode.EXAM_NOT_FOUND));
     }
 
     private Exam findEditableExam(UUID examId) {

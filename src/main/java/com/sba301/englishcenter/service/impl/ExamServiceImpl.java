@@ -17,6 +17,7 @@ import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamQuestion;
 import com.sba301.englishcenter.entity.ExamSection;
 import com.sba301.englishcenter.entity.Question;
+import com.sba301.englishcenter.entity.QuestionOption;
 import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
@@ -28,6 +29,7 @@ import com.sba301.englishcenter.repository.ExamAttemptRepository;
 import com.sba301.englishcenter.repository.ExamQuestionRepository;
 import com.sba301.englishcenter.repository.ExamRepository;
 import com.sba301.englishcenter.repository.ExamSectionRepository;
+import com.sba301.englishcenter.repository.QuestionRepository;
 import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.security.UserPrincipal;
@@ -65,6 +67,7 @@ public class ExamServiceImpl implements ExamService {
     private final CertificatePartRepository certificatePartRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
+    private final QuestionRepository questionRepository;
     private final ExamAccessPolicy accessPolicy;
     private final ExamMapper examMapper;
 
@@ -274,6 +277,106 @@ public class ExamServiceImpl implements ExamService {
         exam = examRepository.save(exam);
         log.info("Đã khôi phục đề thi {} về nháp", examId);
         return buildDetail(exam, ExamMapper.View.ADMIN, null, null);
+    }
+
+    @Override
+    @Transactional
+    public ExamDetailResponse cloneExam(UUID examId) {
+        Exam source = findExam(examId);
+        User admin = userRepository.findById(currentUserId())
+                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
+
+        Exam copy = examRepository.save(Exam.builder()
+                .examScope(source.getExamScope())
+                .createdByUser(admin)
+                .certificate(source.getCertificate())
+                .course(source.getCourse())
+                .examCode(copyCode(source.getExamCode()))
+                .examType(source.getExamType())
+                .examTitle(source.getExamTitle() + " (bản sao)")
+                .description(source.getDescription())
+                .durationMinutes(source.getDurationMinutes())
+                .passingScore(source.getPassingScore())
+                .maxAttempts(source.getMaxAttempts())
+                .showAnswers(source.getShowAnswers())
+                .showScore(source.getShowScore())
+                .isFree(source.getIsFree())
+                .price(source.getPrice())
+                .difficultyLevel(source.getDifficultyLevel())
+                .recommendedLevel(source.getRecommendedLevel())
+                .availableFrom(source.getAvailableFrom())
+                .availableUntil(source.getAvailableUntil())
+                .status(ExamStatus.DRAFT)
+                .build());
+
+        Map<UUID, ExamSection> sections = new HashMap<>();
+        for (ExamSection s : sectionRepository.findByExam_ExamIdOrderBySectionOrderAscCreatedAtAsc(examId)) {
+            sections.put(s.getSectionId(), sectionRepository.save(ExamSection.builder()
+                    .exam(copy)
+                    .certificatePart(s.getCertificatePart())
+                    .sectionType(s.getSectionType())
+                    .title(s.getTitle())
+                    .instructions(s.getInstructions())
+                    .passageText(s.getPassageText())
+                    .audioUrl(s.getAudioUrl())
+                    .sectionOrder(s.getSectionOrder())
+                    .durationMinutes(s.getDurationMinutes())
+                    .build()));
+        }
+
+        // Câu hỏi được chép mới (kể cả đáp án) để sửa bản sao không ảnh hưởng đề gốc / lịch sử thi cũ
+        List<ExamQuestion> questions = examQuestionRepository.findDetailedByExamId(examId);
+        for (ExamQuestion eq : questions) {
+            Question q = eq.getQuestion();
+            Question newQuestion = Question.builder()
+                    .createdByUser(admin)
+                    .certificate(q.getCertificate())
+                    .certificatePart(q.getCertificatePart())
+                    .questionType(q.getQuestionType())
+                    .questionText(q.getQuestionText())
+                    .difficultyLevel(q.getDifficultyLevel())
+                    .topic(q.getTopic())
+                    .points(q.getPoints())
+                    .explanation(q.getExplanation())
+                    .audioUrl(q.getAudioUrl())
+                    .imageUrl(q.getImageUrl())
+                    .build();
+            for (QuestionOption o : q.getOptions()) {
+                newQuestion.getOptions().add(QuestionOption.builder()
+                        .question(newQuestion)
+                        .optionText(o.getOptionText())
+                        .isCorrect(o.getIsCorrect())
+                        .optionOrder(o.getOptionOrder())
+                        .explanation(o.getExplanation())
+                        .build());
+            }
+            examQuestionRepository.save(ExamQuestion.builder()
+                    .exam(copy)
+                    .section(eq.getSection() != null ? sections.get(eq.getSection().getSectionId()) : null)
+                    .question(questionRepository.save(newQuestion))
+                    .questionOrder(eq.getQuestionOrder())
+                    .timeLimitSeconds(eq.getTimeLimitSeconds())
+                    .build());
+        }
+
+        copy.setTotalQuestions(questions.size());
+        copy.setTotalParts(sections.size());
+        copy = examRepository.save(copy);
+        log.info("Admin {} nhân bản đề {} thành {}", admin.getUserId(), examId, copy.getExamId());
+        return buildDetail(copy, ExamMapper.View.ADMIN, null, null);
+    }
+
+    /** Mã đề của bản sao: MA-COPY, MA-COPY-2… (mã đề là duy nhất) */
+    private String copyCode(String code) {
+        if (code == null) {
+            return null;
+        }
+        String base = code + "-COPY";
+        String candidate = base;
+        for (int i = 2; examRepository.existsByExamCode(candidate); i++) {
+            candidate = base + "-" + i;
+        }
+        return candidate;
     }
 
     // ============================================
