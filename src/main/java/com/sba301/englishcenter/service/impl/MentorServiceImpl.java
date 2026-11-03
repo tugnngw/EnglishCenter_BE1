@@ -5,6 +5,7 @@ import com.sba301.englishcenter.dto.request.CreateMentorRequest;
 import com.sba301.englishcenter.dto.request.UpdateMentorRequest;
 import com.sba301.englishcenter.dto.response.CreateMentorResponse;
 import com.sba301.englishcenter.dto.response.MentorResponse;
+import com.sba301.englishcenter.dto.response.MentorStatsResponse;
 import com.sba301.englishcenter.entity.MentorProfile;
 import com.sba301.englishcenter.entity.Role;
 import com.sba301.englishcenter.entity.StudentProfile;
@@ -49,6 +50,8 @@ public class MentorServiceImpl implements MentorService {
     private final EmailService emailService;
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    /** Số ngày tính là "mentor mới" trên trang quản lý */
+    private static final int NEW_MENTOR_DAYS = 30;
     private static final String UPPERCASE = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
     private static final String LOWERCASE = "abcdefghijklmnopqrstuvwxyz";
     private static final String DIGITS = "0123456789";
@@ -107,6 +110,7 @@ public class MentorServiceImpl implements MentorService {
                 .biography(request.getBiography())
                 .hourlyRate(request.getHourlyRate())
                 .ratingAverage(BigDecimal.ZERO)
+                .mentorRegisteredAt(LocalDateTime.now())
                 .build();
 
         mentorProfileRepository.save(profile);
@@ -228,6 +232,38 @@ public class MentorServiceImpl implements MentorService {
                 .data(mentorPage.getContent().stream()
                         .map(profile -> toMentorResponse(profile.getUser(), profile))
                         .toList())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<MentorResponse> getMentorsForAdmin(Pageable pageable, String keyword, String department,
+                                                           String specialization, Boolean isActive) {
+        Specification<MentorProfile> spec =
+                MentorSpecification.filterMentorsForAdmin(keyword, department, specialization, isActive);
+        Page<MentorProfile> mentorPage = mentorProfileRepository.findAll(spec, pageable);
+
+        return PageResponse.<MentorResponse>builder()
+                .currentPage(mentorPage.getNumber())
+                .pageSize(mentorPage.getSize())
+                .totalPages(mentorPage.getTotalPages())
+                .totalElements(mentorPage.getTotalElements())
+                .data(mentorPage.getContent().stream()
+                        .map(profile -> toMentorResponse(profile.getUser(), profile))
+                        .toList())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MentorStatsResponse getMentorStats() {
+        return MentorStatsResponse.builder()
+                .total(mentorProfileRepository.countMentors())
+                .active(mentorProfileRepository.countMentorsByActive(true))
+                .inactive(mentorProfileRepository.countMentorsByActive(false))
+                .newLast30Days(mentorProfileRepository.countMentorsJoinedSince(
+                        LocalDateTime.now().minusDays(NEW_MENTOR_DAYS)))
+                .departments(mentorProfileRepository.findDistinctDepartments())
                 .build();
     }
 

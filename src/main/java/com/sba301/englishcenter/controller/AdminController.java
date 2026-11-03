@@ -19,6 +19,7 @@ import com.sba301.englishcenter.dto.response.CourseResponse;
 import com.sba301.englishcenter.dto.response.CreateMentorResponse;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
 import com.sba301.englishcenter.dto.response.MentorResponse;
+import com.sba301.englishcenter.dto.response.MentorStatsResponse;
 import com.sba301.englishcenter.dto.response.RoleResponse;
 import com.sba301.englishcenter.dto.response.UserResponse;
 import com.sba301.englishcenter.dto.response.VocabularyLibraryItemResponse;
@@ -34,6 +35,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -119,6 +121,26 @@ public class AdminController {
     // ============================================
     // MENTORS
     // ============================================
+
+    @GetMapping("/mentors")
+    @Operation(summary = "Admin: list mentors",
+            description = "Paginated mentors (active + inactive) filtered by keyword (name/email/phone), " +
+                    "department (exact, case-insensitive), specialization (partial) and isActive")
+    public PageResponse<MentorResponse> getMentorsForAdmin(
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) String specialization,
+            @RequestParam(required = false) Boolean isActive,
+            @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return mentorService.getMentorsForAdmin(pageable, keyword, department, specialization, isActive);
+    }
+
+    @GetMapping("/mentors/stats")
+    @Operation(summary = "Admin: mentor statistics",
+            description = "Total / active / inactive / joined in last 30 days, and departments in use")
+    public ApiResponse<MentorStatsResponse> getMentorStats() {
+        return ApiResponse.success(mentorService.getMentorStats());
+    }
 
     @PostMapping("/mentors")
     @Operation(summary = "Create mentor account",

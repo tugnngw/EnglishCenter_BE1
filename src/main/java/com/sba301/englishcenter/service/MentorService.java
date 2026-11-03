@@ -5,6 +5,7 @@ import com.sba301.englishcenter.dto.request.CreateMentorRequest;
 import com.sba301.englishcenter.dto.request.UpdateMentorRequest;
 import com.sba301.englishcenter.dto.response.CreateMentorResponse;
 import com.sba301.englishcenter.dto.response.MentorResponse;
+import com.sba301.englishcenter.dto.response.MentorStatsResponse;
 import org.springframework.data.domain.Pageable;
 
 import java.math.BigDecimal;
@@ -41,6 +42,22 @@ public interface MentorService {
      * @param mentorId Mentor user ID
      */
     void revokeMentor(UUID mentorId);
+
+    /**
+     * Admin: danh sách mentor (cả active / inactive) có lọc + phân trang ở server.
+     *
+     * @param keyword        tên / email / số điện thoại (gần đúng)
+     * @param department     khớp chính xác (không phân biệt hoa thường)
+     * @param specialization gần đúng
+     * @param isActive       null = tất cả
+     */
+    PageResponse<MentorResponse> getMentorsForAdmin(Pageable pageable, String keyword, String department,
+                                                    String specialization, Boolean isActive);
+
+    /**
+     * Admin: thống kê mentor (tổng, đang hoạt động, tạm nghỉ, mới 30 ngày, danh sách department).
+     */
+    MentorStatsResponse getMentorStats();
 
     // ============================================
     // PUBLIC ENDPOINTS
