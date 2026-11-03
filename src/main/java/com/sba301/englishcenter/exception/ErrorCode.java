@@ -105,6 +105,7 @@ public enum ErrorCode {
     EXAM_NOT_ARCHIVED(5024, "Đề thi không ở trạng thái lưu trữ", HttpStatus.CONFLICT),
     AI_IMPORT_INVALID_FILE(5025, "File không hợp lệ: chỉ nhận PDF (tối đa 15MB) hoặc nội dung văn bản", HttpStatus.BAD_REQUEST),
     AI_IMPORT_FAILED(5026, "AI không đọc được file, vui lòng thử lại", HttpStatus.BAD_GATEWAY),
+    ATTEMPT_GRADING_CLAIMED(5027, "Bài này đang được mentor khác chấm", HttpStatus.CONFLICT),
     // === Dev 2.5 - Bài tập: nộp bài, chấm điểm, lưu trữ file ===
     HOMEWORK_SUBMISSION_TYPE_MISMATCH(3020,
             "Hình thức nộp không khớp với bài tập",

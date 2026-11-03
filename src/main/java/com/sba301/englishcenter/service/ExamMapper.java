@@ -285,6 +285,10 @@ public class ExamMapper {
             builder.studentId(student.getUserId())
                     .studentName(student.getFullName())
                     .studentEmail(student.getEmail());
+            if (attempt.getGradingBy() != null) {
+                builder.gradingById(attempt.getGradingBy().getUserId())
+                        .gradingByName(attempt.getGradingBy().getFullName());
+            }
         }
         return builder.build();
     }

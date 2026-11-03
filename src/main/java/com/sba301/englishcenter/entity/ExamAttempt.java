@@ -58,6 +58,14 @@ public class ExamAttempt {
     @JoinColumn(name = "student_id", nullable = false)
     private User student;
 
+    /** Mentor đã nhận chấm lượt thi này (lần chấm đầu tiên); mentor khác không chấm đè được. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "grading_by")
+    private User gradingBy;
+
+    @Column(name = "grading_claimed_at")
+    private LocalDateTime gradingClaimedAt;
+
     @Builder.Default
     @Column(name = "attempt_number")
     private Integer attemptNumber = 1;

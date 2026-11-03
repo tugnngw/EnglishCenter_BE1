@@ -50,4 +50,8 @@ public class AttemptSummaryResponse {
     UUID studentId;
     String studentName;
     String studentEmail;
+
+    /** Mentor đang chấm bài (chỉ trả cho staff) */
+    UUID gradingById;
+    String gradingByName;
 }

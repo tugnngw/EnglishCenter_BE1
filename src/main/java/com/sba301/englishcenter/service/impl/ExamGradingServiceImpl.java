@@ -12,6 +12,7 @@ import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamAnswer;
 import com.sba301.englishcenter.entity.ExamAttempt;
 import com.sba301.englishcenter.entity.ExamQuestion;
+import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.service.ExamMapper;
@@ -103,6 +104,8 @@ public class ExamGradingServiceImpl implements ExamGradingService {
             throw new AppException(ErrorCode.ATTEMPT_NOT_SUBMITTED);
         }
 
+        claimForGrading(attempt, principal);
+
         ExamAnswer answer = answerRepository.findByAttemptIdAndQuestionId(attemptId, questionId)
                 .orElseThrow(() -> new AppException(ErrorCode.ANSWER_NOT_FOUND));
         if (answer.getQuestion().getQuestionType() != QuestionType.ESSAY) {
@@ -162,6 +165,24 @@ public class ExamGradingServiceImpl implements ExamGradingService {
     private Map<UUID, ExamAnswer> answersByQuestion(UUID attemptId) {
         return answerRepository.findDetailedByAttemptId(attemptId).stream()
                 .collect(Collectors.toMap(a -> a.getQuestion().getQuestionId(), Function.identity(), (a, b) -> a));
+    }
+
+    /**
+     * Lần chấm đầu tiên của mentor = nhận chấm bài; mentor khác chấm vào bài đã có người nhận bị chặn (5027).
+     * Admin chấm được mọi bài (xử lý khi mentor nghỉ giữa chừng) và không giữ bài.
+     */
+    private void claimForGrading(ExamAttempt attempt, UserPrincipal principal) {
+        if (isAdmin(principal)) {
+            return;
+        }
+        User owner = attempt.getGradingBy();
+        if (owner == null) {
+            attempt.setGradingBy(userRepository.getReferenceById(principal.getUserId()));
+            attempt.setGradingClaimedAt(LocalDateTime.now());
+        } else if (!owner.getUserId().equals(principal.getUserId())) {
+            throw new AppException(ErrorCode.ATTEMPT_GRADING_CLAIMED,
+                    "Bài này đang được " + owner.getFullName() + " chấm");
+        }
     }
 
     private static boolean isAdmin(UserPrincipal principal) {

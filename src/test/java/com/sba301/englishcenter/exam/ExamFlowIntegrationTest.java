@@ -206,6 +206,17 @@ class ExamFlowIntegrationTest {
                 .read("$.data[*].attemptId")).contains(attemptId);
         assertThat(call(get("/api/v1/mentor/exam-attempts/" + attemptId), mentor, null).status()).isEqualTo(200);
 
+        // ---------- Nhận chấm: mentor chấm đầu tiên giữ bài, mentor khác không chấm đè được, admin vẫn chấm được
+        // (trigger DB chỉ cho admin tạo user MENTOR, nên tạo user thường rồi cấp quyền MENTOR trong token)
+        UsernamePasswordAuthenticationToken mentorA = auth(createStudent(), "MENTOR");
+        UsernamePasswordAuthenticationToken mentorB = auth(createStudent(), "MENTOR");
+        assertThat(call(put("/api/v1/mentor/exam-attempts/" + attemptId + "/answers/" + essayId + "/grade"), mentorA,
+                "{\"score\":3}").status()).isEqualTo(200);
+        assertThat((Integer) call(put("/api/v1/mentor/exam-attempts/" + attemptId + "/answers/" + essayId + "/grade"),
+                mentorB, "{\"score\":1}").read("$.code")).isEqualTo(5027);
+        assertThat((String) call(get("/api/v1/mentor/exam-attempts/" + attemptId), mentorB, null)
+                .read("$.result.attempt.gradingByName")).isEqualTo("Student");
+
         // ---------- Chấm Writing
         assertThat(call(put("/api/v1/mentor/exam-attempts/" + attemptId + "/answers/" + essayId + "/grade"), admin,
                 "{\"score\":7}").status()).isEqualTo(400);
