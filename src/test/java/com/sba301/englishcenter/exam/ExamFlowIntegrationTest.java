@@ -297,6 +297,29 @@ class ExamFlowIntegrationTest {
         assertThat(cloneQuestionIds).isNotEmpty().doesNotContain(mcId, essayId);
         assertThat(call(put("/api/v1/admin/exams/" + cloneId + "/questions/" + cloneQuestionIds.get(0)), admin,
                 "{\"points\":3}").status()).isEqualTo(200);
+
+        // ---------- Lưu cả bộ đề một lần (sau xem trước file / AI): một câu lỗi thì không lưu gì
+        long sectionsBefore = jdbc.queryForObject("SELECT count(*) FROM exam_sections WHERE exam_id = ?::uuid",
+                Long.class, cloneId);
+        Response bad = call(post("/api/v1/admin/exams/" + cloneId + "/content"), admin, """
+                {"sections":[{"section":{"title":"Imported","sectionType":"READING"},
+                  "questions":[{"questionType":"multiple_choice","questionText":"OK?","points":1,
+                                "options":[{"optionText":"a","isCorrect":true},{"optionText":"b"}]},
+                               {"questionType":"multiple_choice","questionText":"No answer","points":1,
+                                "options":[{"optionText":"a"},{"optionText":"b"}]}]}]}""");
+        assertThat(bad.status()).as(bad.body()).isEqualTo(400);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM exam_sections WHERE exam_id = ?::uuid", Long.class, cloneId))
+                .isEqualTo(sectionsBefore);
+        Response good = call(post("/api/v1/admin/exams/" + cloneId + "/content"), admin, """
+                {"sections":[{"section":{"title":"Imported","sectionType":"READING"},
+                  "questions":[{"questionType":"multiple_choice","questionText":"OK?","points":1,
+                                "options":[{"optionText":"a","isCorrect":true},{"optionText":"b"}]},
+                               {"questionType":"essay","questionText":"Write.","points":2}]}],
+                 "questions":[{"questionType":"true_false","questionText":"Loose","points":1,
+                               "options":[{"optionText":"True","isCorrect":true},{"optionText":"False"}]}]}""");
+        assertThat(good.status()).as(good.body()).isEqualTo(200);
+        assertThat((Integer) good.read("$.result.sectionCount")).isEqualTo(1);
+        assertThat((Integer) good.read("$.result.questionCount")).isEqualTo(3);
     }
 
     /** File init dữ liệu mẫu chạy được 2 lần (idempotent); đề course bị chặn khi chưa có enrollment. */

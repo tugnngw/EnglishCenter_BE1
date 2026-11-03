@@ -3,6 +3,7 @@ package com.sba301.englishcenter.controller;
 import com.sba301.englishcenter.common.ApiResponse;
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.dto.request.CreateExamQuestionRequest;
+import com.sba301.englishcenter.dto.request.ImportExamContentRequest;
 import com.sba301.englishcenter.dto.request.CreateExamRequest;
 import com.sba301.englishcenter.dto.request.CreateExamSectionRequest;
 import com.sba301.englishcenter.dto.request.UpdateExamQuestionRequest;
@@ -154,6 +155,14 @@ public class AdminExamController {
     // ============================================
     // QUESTIONS & OPTIONS (D3-04, D3-05)
     // ============================================
+
+    @PostMapping("/exams/{examId}/content")
+    @Operation(summary = "Import exam content", description = "Create all sections and questions of a draft exam in one "
+            + "transaction (used after previewing a Word / AI import). Nothing is saved if any question is invalid.")
+    public ApiResponse<ExamStructureService.ImportExamContentResult> importContent(@PathVariable UUID examId,
+            @Valid @RequestBody ImportExamContentRequest request) {
+        return ApiResponse.success("Đã tạo bộ đề", structureService.importContent(examId, request));
+    }
 
     @PostMapping("/exams/{examId}/questions")
     @Operation(summary = "Add question", description = "Either reuse a bank question (questionId) or create a new "

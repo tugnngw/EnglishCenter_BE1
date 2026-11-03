@@ -4,6 +4,7 @@ import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.DifficultyLevel;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.dto.request.CreateExamQuestionRequest;
+import com.sba301.englishcenter.dto.request.ImportExamContentRequest;
 import com.sba301.englishcenter.dto.request.CreateExamSectionRequest;
 import com.sba301.englishcenter.dto.request.QuestionOptionRequest;
 import com.sba301.englishcenter.dto.request.UpdateExamQuestionRequest;
@@ -128,6 +129,29 @@ public class ExamStructureServiceImpl implements ExamStructureService {
     // ============================================
     // QUESTIONS & OPTIONS (D3-04, D3-05)
     // ============================================
+
+    @Override
+    @Transactional
+    public ImportExamContentResult importContent(UUID examId, ImportExamContentRequest request) {
+        findEditableExam(examId);
+        int questionCount = 0;
+        // Cùng một giao dịch: câu nào lỗi (đáp án sai, phần thi không thuộc chứng chỉ...) thì không lưu gì cả
+        for (ImportExamContentRequest.SectionContent content : request.getSections()) {
+            UUID sectionId = createSection(examId, content.getSection()).getSectionId();
+            for (CreateExamQuestionRequest question : content.getQuestions()) {
+                question.setSectionId(sectionId);
+                addQuestion(examId, question);
+                questionCount++;
+            }
+        }
+        for (CreateExamQuestionRequest question : request.getQuestions()) {
+            question.setSectionId(null);
+            addQuestion(examId, question);
+            questionCount++;
+        }
+        log.info("Nhập {} phần thi, {} câu hỏi vào đề {}", request.getSections().size(), questionCount, examId);
+        return new ImportExamContentResult(request.getSections().size(), questionCount);
+    }
 
     @Override
     @Transactional

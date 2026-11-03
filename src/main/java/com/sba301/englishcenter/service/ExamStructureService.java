@@ -4,6 +4,7 @@ import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.DifficultyLevel;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.dto.request.CreateExamQuestionRequest;
+import com.sba301.englishcenter.dto.request.ImportExamContentRequest;
 import com.sba301.englishcenter.dto.request.CreateExamSectionRequest;
 import com.sba301.englishcenter.dto.request.UpdateExamQuestionRequest;
 import com.sba301.englishcenter.dto.request.UpdateExamSectionRequest;
@@ -27,6 +28,12 @@ public interface ExamStructureService {
     void deleteSection(UUID examId, UUID sectionId);
 
     ExamQuestionResponse addQuestion(UUID examId, CreateExamQuestionRequest request);
+
+    /** Lưu cả bộ đề (phần thi + câu hỏi) trong một giao dịch; trả về số phần thi và số câu đã tạo. */
+    ImportExamContentResult importContent(UUID examId, ImportExamContentRequest request);
+
+    record ImportExamContentResult(int sectionCount, int questionCount) {
+    }
 
     ExamQuestionResponse updateQuestion(UUID examId, UUID questionId, UpdateExamQuestionRequest request);
 
