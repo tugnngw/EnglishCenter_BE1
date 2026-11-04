@@ -22,7 +22,8 @@ import java.util.UUID;
 
 /**
  * Admin cập nhật đề thi. Trường null = giữ nguyên.
- * certificateId / courseId chỉ đổi được khi đề còn draft và chưa có lượt thi.
+ * certificateId / courseId chỉ đổi được khi đề còn draft và chưa có lượt thi
+ * (gửi lại đúng giá trị cũ thì không bị chặn).
  */
 @Getter
 @Setter
@@ -33,6 +34,12 @@ import java.util.UUID;
 public class UpdateExamRequest {
 
     UUID certificateId;
+
+    /**
+     * true = bỏ gắn chứng chỉ (đề luyện tập "dùng cho mọi mục tiêu").
+     * Cần cờ riêng vì certificateId = null nghĩa là giữ nguyên.
+     */
+    Boolean clearCertificate;
 
     UUID courseId;
 

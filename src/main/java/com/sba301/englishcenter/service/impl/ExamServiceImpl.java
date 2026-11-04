@@ -11,14 +11,17 @@ import com.sba301.englishcenter.dto.request.UpdateExamRequest;
 import com.sba301.englishcenter.dto.response.ExamDetailResponse;
 import com.sba301.englishcenter.dto.response.ExamSummaryResponse;
 import com.sba301.englishcenter.entity.Certificate;
+import com.sba301.englishcenter.entity.CertificatePart;
 import com.sba301.englishcenter.entity.Course;
 import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamQuestion;
+import com.sba301.englishcenter.entity.ExamSection;
 import com.sba301.englishcenter.entity.Question;
 import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.service.ExamMapper;
+import com.sba301.englishcenter.repository.CertificatePartRepository;
 import com.sba301.englishcenter.repository.CertificateRepository;
 import com.sba301.englishcenter.repository.CourseRepository;
 import com.sba301.englishcenter.repository.ExamAttemptRepository;
@@ -41,7 +44,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -55,6 +62,7 @@ public class ExamServiceImpl implements ExamService {
     private final ExamQuestionRepository examQuestionRepository;
     private final ExamAttemptRepository attemptRepository;
     private final CertificateRepository certificateRepository;
+    private final CertificatePartRepository certificatePartRepository;
     private final CourseRepository courseRepository;
     private final UserRepository userRepository;
     private final ExamAccessPolicy accessPolicy;
@@ -161,13 +169,23 @@ public class ExamServiceImpl implements ExamService {
         if (request.getDurationMinutes() != null) {
             exam.setDurationMinutes(request.getDurationMinutes());
         }
-        if (request.getCertificateId() != null || request.getCourseId() != null) {
-            assertStructureEditable(exam);
-            applyScopeTarget(exam, exam.getExamScope(),
-                    request.getCertificateId() != null ? request.getCertificateId()
-                            : exam.getCertificate() != null ? exam.getCertificate().getCertificateId() : null,
-                    request.getCourseId() != null ? request.getCourseId()
-                            : exam.getCourse() != null ? exam.getCourse().getCourseId() : null);
+        boolean clearCertificate = Boolean.TRUE.equals(request.getClearCertificate());
+        if (request.getCertificateId() != null || request.getCourseId() != null || clearCertificate) {
+            UUID oldCertificateId = exam.getCertificate() != null ? exam.getCertificate().getCertificateId() : null;
+            UUID oldCourseId = exam.getCourse() != null ? exam.getCourse().getCourseId() : null;
+            UUID newCertificateId = clearCertificate ? null
+                    : request.getCertificateId() != null ? request.getCertificateId() : oldCertificateId;
+            UUID newCourseId = request.getCourseId() != null ? request.getCourseId() : oldCourseId;
+            // Gửi lại đúng chứng chỉ / khóa học cũ thì không coi là đổi cấu trúc
+            if (!Objects.equals(oldCertificateId, newCertificateId) || !Objects.equals(oldCourseId, newCourseId)) {
+                assertStructureEditable(exam);
+                applyScopeTarget(exam, exam.getExamScope(), newCertificateId, newCourseId);
+                UUID appliedCertificateId = exam.getCertificate() != null
+                        ? exam.getCertificate().getCertificateId() : null;
+                if (!Objects.equals(oldCertificateId, appliedCertificateId)) {
+                    remapCertificateParts(exam, oldCertificateId);
+                }
+            }
         }
         applyCommonFields(exam, request.getExamType(), request.getDescription(), request.getPassingScore(),
                 request.getMaxAttempts(), request.getShowAnswers(), request.getShowScore(), request.getIsFree(),
@@ -281,6 +299,60 @@ public class ExamServiceImpl implements ExamService {
                 sectionRepository.findByExam_ExamIdOrderBySectionOrderAscCreatedAtAsc(exam.getExamId()),
                 exam.getExamId() == null ? List.of() : examQuestionRepository.findDetailedByExamId(exam.getExamId()),
                 view, accessible, message);
+    }
+
+    /**
+     * Đổi chứng chỉ của đề (VD lỡ gắn IELTS cho đề TOEIC): section và câu hỏi đang trỏ tới phần thi
+     * của chứng chỉ cũ → chuyển sang phần thi cùng kỹ năng của chứng chỉ mới, không có thì bỏ liên kết
+     * (FE tự lấy thang theo kỹ năng của section).
+     */
+    private void remapCertificateParts(Exam exam, UUID oldCertificateId) {
+        Certificate certificate = exam.getCertificate();
+        List<CertificatePart> parts = certificate == null ? List.of()
+                : certificatePartRepository.findByCertificate_CertificateIdOrderByPartOrderAsc(
+                certificate.getCertificateId());
+
+        List<ExamSection> sections =
+                sectionRepository.findByExam_ExamIdOrderBySectionOrderAscCreatedAtAsc(exam.getExamId());
+        Map<UUID, CertificatePart> partBySection = new HashMap<>();
+        for (ExamSection section : sections) {
+            CertificatePart part = matchPartBySkill(parts, section.getSectionType());
+            section.setCertificatePart(part);
+            partBySection.put(section.getSectionId(), part);
+        }
+        sectionRepository.saveAll(sections);
+
+        // Câu hỏi tạo kèm đề (đang gắn chứng chỉ cũ) → gắn theo chứng chỉ mới để lọc ngân hàng câu hỏi cho đúng;
+        // câu lấy từ ngân hàng của chứng chỉ khác thì giữ nguyên
+        for (ExamQuestion eq : examQuestionRepository.findDetailedByExamId(exam.getExamId())) {
+            Question question = eq.getQuestion();
+            UUID questionCertificateId = question.getCertificate() != null
+                    ? question.getCertificate().getCertificateId() : null;
+            if (!Objects.equals(questionCertificateId, oldCertificateId)) {
+                continue;
+            }
+            question.setCertificate(certificate);
+            question.setCertificatePart(eq.getSection() != null
+                    ? partBySection.get(eq.getSection().getSectionId()) : null);
+        }
+        log.info("Đề {} đổi chứng chỉ → gắn lại phần thi cho {} section", exam.getExamId(), sections.size());
+    }
+
+    /** Phần thi của chứng chỉ có tên chứa kỹ năng của section (Listening / Reading / Writing / Speaking). */
+    private static CertificatePart matchPartBySkill(List<CertificatePart> parts, String sectionType) {
+        String type = sectionType == null ? "" : sectionType.toUpperCase(Locale.ROOT);
+        String key = type.contains("LISTEN") ? "LISTEN"
+                : type.contains("READ") ? "READ"
+                : type.contains("WRIT") ? "WRIT"
+                : type.contains("SPEAK") ? "SPEAK"
+                : null;
+        if (key == null) {
+            return null;
+        }
+        return parts.stream()
+                .filter(p -> p.getPartName() != null && p.getPartName().toUpperCase(Locale.ROOT).contains(key))
+                .findFirst()
+                .orElse(null);
     }
 
     private void applyScopeTarget(Exam exam, ExamScope scope, UUID certificateId, UUID courseId) {
