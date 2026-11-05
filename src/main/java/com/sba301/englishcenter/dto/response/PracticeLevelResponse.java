@@ -47,5 +47,9 @@ public class PracticeLevelResponse {
         String cefrLevel;
         /** % điểm đạt của kỹ năng trong đề */
         BigDecimal percentage;
+        /** Tên phần thi của chứng chỉ (VD "Grammar & Vocabulary" cho Core của Aptis); null = tên kỹ năng */
+        String name;
+        /** true = điểm riêng, không tính vào điểm tổng (VD Aptis Core) */
+        Boolean excludeFromTotal;
     }
 }

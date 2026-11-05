@@ -73,6 +73,52 @@ public class ScoringScaleResolver {
                 ScoringScale.IELTS.maxScore(), ScoringScale.IELTS.step());
     }
 
+    /**
+     * Phần thi "Core" của chứng chỉ mục tiêu: phần không thuộc 4 kỹ năng (VD Aptis "Grammar &amp; Vocabulary").
+     *
+     * @param scale             thang của phần đó (không cấu hình thì dùng thang chung của chứng chỉ)
+     * @param excludeFromTotal  true = có điểm riêng, không cộng vào điểm tổng (properties.excludeFromTotal)
+     */
+    public record CorePart(String name, ScoringScale scale, boolean excludeFromTotal) {
+    }
+
+    /** Không có chứng chỉ mục tiêu / chứng chỉ không có phần Core → empty. */
+    @Transactional(readOnly = true)
+    public Optional<CorePart> resolveCorePart(UUID studentId) {
+        Optional<Certificate> certificate = studentProfileRepository.findById(studentId)
+                .map(StudentProfile::getTargetCertificateId)
+                .flatMap(certificateRepository::findById);
+        if (certificate.isEmpty()) {
+            return Optional.empty();
+        }
+        Certificate cert = certificate.get();
+        for (CertificatePart part : certificatePartRepository
+                .findByCertificate_CertificateIdOrderByPartOrderAsc(cert.getCertificateId())) {
+            String partName = part.getPartName() == null ? "" : part.getPartName().toUpperCase();
+            boolean skillPart = partName.contains("LISTEN") || partName.contains("READ")
+                    || partName.contains("WRIT") || partName.contains("SPEAK");
+            if (skillPart) {
+                continue;
+            }
+            ScoringScale scale = Optional.ofNullable(fromJson(cert.getCertificateName(), part.getProperties()))
+                    .orElseGet(() -> resolve(studentId, (String) null));
+            return Optional.of(new CorePart(part.getPartName(), scale, excludeFromTotal(part.getProperties())));
+        }
+        return Optional.empty();
+    }
+
+    private boolean excludeFromTotal(String properties) {
+        if (!StringUtils.hasText(properties)) {
+            return false;
+        }
+        try {
+            JsonNode node = json.readTree(properties).path("excludeFromTotal");
+            return node.asBoolean(false) || "true".equalsIgnoreCase(node.asText());
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
     private String scoringNodeOf(String description) {
         if (!StringUtils.hasText(description) || !description.trim().startsWith("{")) {
             return null;

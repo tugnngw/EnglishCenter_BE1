@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -26,6 +27,8 @@ import java.util.UUID;
  *     thay vì điểm thấp nhất của thang (IELTS 1.0);</li>
  *     <li>Điểm tổng = trung bình tỷ lệ các kỹ năng quy ra thang chung, làm tròn theo bước (IELTS: 0.5);
  *     bỏ trống tất cả kỹ năng → 0;</li>
+ *     <li>Phần Core (section GENERAL, VD Aptis Grammar &amp; Vocabulary): chấm theo thang của phần đó; nếu chứng chỉ
+ *     đánh dấu excludeFromTotal thì chỉ báo điểm riêng, không tính vào điểm tổng;</li>
  *     <li>CEFR theo bảng quy đổi của chứng chỉ (IELTS / TOEIC / VSTEP / TOEFL), chứng chỉ khác theo %.</li>
  * </ol>
  */
@@ -65,33 +68,46 @@ public class PracticeLevelCalculator {
         ScoringScale overallScale = scoringScaleResolver.resolve(studentId, (String) null);
         List<PracticeLevelResponse.SkillLevel> skills = new ArrayList<>();
         BigDecimal ratioSum = BigDecimal.ZERO;
+        int counted = 0;
         boolean anyAnswered = false;
+        Optional<ScoringScaleResolver.CorePart> core = bySkill.get("OTHER") == null
+                ? Optional.empty() : scoringScaleResolver.resolveCorePart(studentId);
+        // Đề chỉ có phần Core thì vẫn lấy Core làm điểm tổng (không để điểm tổng trống)
+        boolean onlyCore = bySkill.entrySet().stream()
+                .noneMatch(e -> !"OTHER".equals(e.getKey()) && e.getValue() != null && e.getValue()[1].signum() > 0);
         for (Map.Entry<String, BigDecimal[]> e : bySkill.entrySet()) {
             if (e.getValue() == null || e.getValue()[1].signum() <= 0) {
                 continue;
             }
             BigDecimal ratio = e.getValue()[0].divide(e.getValue()[1], 6, RoundingMode.HALF_UP);
-            ScoringScale scale = "OTHER".equals(e.getKey()) ? overallScale
+            boolean isCore = "OTHER".equals(e.getKey());
+            ScoringScale scale = isCore ? core.map(ScoringScaleResolver.CorePart::scale).orElse(overallScale)
                     : scoringScaleResolver.resolve(studentId, e.getKey());
+            boolean excluded = isCore && !onlyCore && core.map(ScoringScaleResolver.CorePart::excludeFromTotal).orElse(false);
             // Không trả lời câu nào của kỹ năng -> 0 điểm (không kéo lên điểm thấp nhất của thang)
             boolean blank = e.getValue()[2].signum() == 0;
             BigDecimal score = blank ? zeroScore(scale) : toScale(ratio, scale);
-            ratioSum = ratioSum.add(blank ? BigDecimal.ZERO : ratioOf(score, scale));
-            anyAnswered |= !blank;
+            if (!excluded) {
+                ratioSum = ratioSum.add(blank ? BigDecimal.ZERO : ratioOf(score, scale));
+                counted++;
+                anyAnswered |= !blank;
+            }
             skills.add(PracticeLevelResponse.SkillLevel.builder()
                     .skill(e.getKey())
                     .score(score)
                     .maxScore(scale.maxScore())
                     .cefrLevel(cefr(scale, score))
                     .percentage(ExamGrader.percentage(e.getValue()[0], e.getValue()[1]))
+                    .name(isCore ? core.map(ScoringScaleResolver.CorePart::name).orElse(null) : null)
+                    .excludeFromTotal(excluded ? Boolean.TRUE : null)
                     .build());
         }
         if (skills.isEmpty()) {
             return null;
         }
 
-        BigDecimal overall = anyAnswered
-                ? toScale(ratioSum.divide(BigDecimal.valueOf(skills.size()), 6, RoundingMode.HALF_UP), overallScale)
+        BigDecimal overall = anyAnswered && counted > 0
+                ? toScale(ratioSum.divide(BigDecimal.valueOf(counted), 6, RoundingMode.HALF_UP), overallScale)
                 : zeroScore(overallScale);
         return PracticeLevelResponse.builder()
                 .certificateName(overallScale.certificateName())
