@@ -22,7 +22,10 @@ import java.util.UUID;
  * <ol>
  *     <li>Gộp các section cùng kỹ năng (VD Listening Part 1 + Part 2) → % điểm của kỹ năng;</li>
  *     <li>% → điểm theo thang của phần thi đó (Writing / Speaking: % = band AI chấm quy ra, nên khớp band AI);</li>
- *     <li>Điểm tổng = trung bình tỷ lệ các kỹ năng quy ra thang chung, làm tròn theo bước (IELTS: 0.5);</li>
+ *     <li>Kỹ năng bỏ trống toàn bộ (không trả lời câu nào) → 0 điểm, giống IELTS band 0 "không làm bài",
+ *     thay vì điểm thấp nhất của thang (IELTS 1.0);</li>
+ *     <li>Điểm tổng = trung bình tỷ lệ các kỹ năng quy ra thang chung, làm tròn theo bước (IELTS: 0.5);
+ *     bỏ trống tất cả kỹ năng → 0;</li>
  *     <li>CEFR theo bảng quy đổi của chứng chỉ (IELTS / TOEIC / VSTEP / TOEFL), chứng chỉ khác theo %.</li>
  * </ol>
  */
@@ -45,20 +48,24 @@ public class PracticeLevelCalculator {
             if (grader.isPendingManual(eq.getQuestion(), answer)) {
                 return null;
             }
-            // [điểm đạt, điểm tối đa] của kỹ năng; map đã có sẵn khóa theo thứ tự L - R - W - S
+            // [điểm đạt, điểm tối đa, số câu có trả lời] của kỹ năng; map đã có sẵn khóa theo thứ tự L - R - W - S
             String skill = skillOf(eq.getSection());
             BigDecimal[] acc = bySkill.get(skill);
             if (acc == null) {
-                acc = new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO};
+                acc = new BigDecimal[]{BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO};
                 bySkill.put(skill, acc);
             }
             acc[0] = acc[0].add(answer != null && answer.getEarnedScore() != null ? answer.getEarnedScore() : BigDecimal.ZERO);
             acc[1] = acc[1].add(ExamGrader.points(eq.getQuestion()));
+            if (grader.isAnswered(eq.getQuestion(), answer)) {
+                acc[2] = acc[2].add(BigDecimal.ONE);
+            }
         }
 
         ScoringScale overallScale = scoringScaleResolver.resolve(studentId, (String) null);
         List<PracticeLevelResponse.SkillLevel> skills = new ArrayList<>();
         BigDecimal ratioSum = BigDecimal.ZERO;
+        boolean anyAnswered = false;
         for (Map.Entry<String, BigDecimal[]> e : bySkill.entrySet()) {
             if (e.getValue() == null || e.getValue()[1].signum() <= 0) {
                 continue;
@@ -66,8 +73,11 @@ public class PracticeLevelCalculator {
             BigDecimal ratio = e.getValue()[0].divide(e.getValue()[1], 6, RoundingMode.HALF_UP);
             ScoringScale scale = "OTHER".equals(e.getKey()) ? overallScale
                     : scoringScaleResolver.resolve(studentId, e.getKey());
-            BigDecimal score = toScale(ratio, scale);
-            ratioSum = ratioSum.add(ratioOf(score, scale));
+            // Không trả lời câu nào của kỹ năng -> 0 điểm (không kéo lên điểm thấp nhất của thang)
+            boolean blank = e.getValue()[2].signum() == 0;
+            BigDecimal score = blank ? zeroScore(scale) : toScale(ratio, scale);
+            ratioSum = ratioSum.add(blank ? BigDecimal.ZERO : ratioOf(score, scale));
+            anyAnswered |= !blank;
             skills.add(PracticeLevelResponse.SkillLevel.builder()
                     .skill(e.getKey())
                     .score(score)
@@ -80,8 +90,9 @@ public class PracticeLevelCalculator {
             return null;
         }
 
-        BigDecimal overall = toScale(ratioSum.divide(BigDecimal.valueOf(skills.size()), 6, RoundingMode.HALF_UP),
-                overallScale);
+        BigDecimal overall = anyAnswered
+                ? toScale(ratioSum.divide(BigDecimal.valueOf(skills.size()), 6, RoundingMode.HALF_UP), overallScale)
+                : zeroScore(overallScale);
         return PracticeLevelResponse.builder()
                 .certificateName(overallScale.certificateName())
                 .overallScore(overall)
@@ -107,6 +118,11 @@ public class PracticeLevelCalculator {
     static BigDecimal toScale(BigDecimal ratio, ScoringScale scale) {
         BigDecimal range = scale.maxScore().subtract(scale.minScore());
         return scale.normalize(scale.minScore().add(range.multiply(ratio)));
+    }
+
+    /** 0 điểm, cùng số chữ số thập phân với thang (IELTS: 0.0, TOEIC: 0). */
+    static BigDecimal zeroScore(ScoringScale scale) {
+        return BigDecimal.ZERO.setScale(Math.max(scale.step().stripTrailingZeros().scale(), 0), RoundingMode.HALF_UP);
     }
 
     static BigDecimal ratioOf(BigDecimal score, ScoringScale scale) {
