@@ -111,8 +111,9 @@ public class CloudinaryService {
             String key = entry.getKey();
             Object value = entry.getValue();
             if (value == null) continue;
+            // Cloudinary KHÔNG ký các tham số này (resource_type nằm trên URL upload, không nằm trong chữ ký)
             if ("file".equals(key) || "cloud_name".equals(key) || "api_key".equals(key)
-                    || "signature".equals(key)) {
+                    || "signature".equals(key) || "resource_type".equals(key)) {
                 continue;
             }
             if (value instanceof Iterable<?> iterable) {
@@ -126,7 +127,16 @@ public class CloudinaryService {
                 toSign.put(key, String.valueOf(value));
             }
         }
-        return sha1(toSign.toString() + apiSecret);
+        // Chuỗi ký đúng chuẩn Cloudinary: "key1=value1&key2=value2" (sắp xếp a-z) + apiSecret.
+        // KHÔNG dùng TreeMap.toString() vì nó sinh "{key1=value1, key2=value2}" -> Cloudinary báo Invalid Signature
+        StringBuilder stringToSign = new StringBuilder();
+        for (Map.Entry<String, Object> entry : toSign.entrySet()) {
+            if (stringToSign.length() > 0) {
+                stringToSign.append('&');
+            }
+            stringToSign.append(entry.getKey()).append('=').append(entry.getValue());
+        }
+        return sha1(stringToSign + apiSecret);
     }
 
     /**
