@@ -47,6 +47,12 @@ public interface ExamAttemptService {
 
     AttemptResultResponse getMyAttemptResult(UUID attemptId);
 
+    /** Dev 5: mentor xem các lượt test level (đề luyện tập) của 1 học viên, mới nhất trước. */
+    PageResponse<AttemptSummaryResponse> getStudentLevelTests(UUID studentId, Pageable pageable);
+
+    /** Dev 5: mentor xem kết quả chi tiết 1 lượt test level đã nộp của học viên (điểm, nhận xét AI). */
+    AttemptResultResponse getStudentLevelTestResult(UUID studentId, UUID attemptId);
+
     /** Học viên đã thi đạt đề này chưa (Dev 5 dùng để tính tiến độ Learning Path). */
     boolean hasPassedExam(UUID studentId, UUID examId);
 

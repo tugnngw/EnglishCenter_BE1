@@ -35,7 +35,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -84,53 +83,7 @@ class BookingControllerTest {
                 .build();
     }
 
-    // ===================== POST /bookings =====================
-
-    @Test
-    @DisplayName("Mentor không được đặt slot -> 403")
-    void book_mentorForbidden() throws Exception {
-        mockMvc.perform(post("/api/v1/bookings").with(as("MENTOR"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"scheduleId\":\"" + scheduleId + "\"}"))
-                .andExpect(status().isForbidden());
-        verifyNoInteractions(bookingService);
-    }
-
-    @Test
-    @DisplayName("Thiếu scheduleId -> 400 validation")
-    void book_missingScheduleId() throws Exception {
-        mockMvc.perform(post("/api/v1/bookings").with(as("STUDENT"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isBadRequest());
-        verifyNoInteractions(bookingService);
-    }
-
-    @Test
-    @DisplayName("Học viên đặt slot thành công -> 200, booking confirmed")
-    void book_success() throws Exception {
-        when(bookingService.book(any(), any())).thenReturn(response("confirmed"));
-
-        mockMvc.perform(post("/api/v1/bookings").with(as("STUDENT"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"scheduleId\":\"" + scheduleId + "\"}"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.result.status").value("confirmed"));
-    }
-
-    @Test
-    @DisplayName("Slot đã có người đặt -> 409")
-    void book_notAvailable() throws Exception {
-        when(bookingService.book(any(), any())).thenThrow(new AppException(ErrorCode.SCHEDULE_NOT_AVAILABLE));
-
-        mockMvc.perform(post("/api/v1/bookings").with(as("STUDENT"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"scheduleId\":\"" + scheduleId + "\"}"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value(ErrorCode.SCHEDULE_NOT_AVAILABLE.getCode()));
-    }
-
-    // ===================== cancel / reschedule =====================
+    // ===================== cancel =====================
 
     @Test
     @DisplayName("Hủy lịch không gửi body -> vẫn hợp lệ (lý do không bắt buộc)")
@@ -153,16 +106,6 @@ class BookingControllerTest {
                         .content("{\"reason\":\"Bận\"}"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value(ErrorCode.BOOKING_CANCEL_DEADLINE_PASSED.getCode()));
-    }
-
-    @Test
-    @DisplayName("Mentor không được đổi lịch -> 403")
-    void reschedule_mentorForbidden() throws Exception {
-        mockMvc.perform(put("/api/v1/bookings/{id}/reschedule", bookingId).with(as("MENTOR"))
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"newScheduleId\":\"" + scheduleId + "\"}"))
-                .andExpect(status().isForbidden());
-        verifyNoInteractions(bookingService);
     }
 
     // ===================== lịch của tôi / mentor / admin =====================

@@ -115,4 +115,48 @@ class ClaudeEvaluationClientTest {
         AppException ex = assertThrows(AppException.class, () -> garbage.evaluate(PracticeExamType.WRITING, "q", "a", ScoringScale.IELTS));
         assertEquals(ErrorCode.AI_EVALUATION_FAILED, ex.getErrorCode());
     }
+
+    // ===================== Dev 5: bài không phải tiếng Anh / trống -> 0 điểm, không gọi AI =====================
+
+    @Test
+    void vietnameseAnswerScoresZeroWithoutCallingAi() throws Exception {
+        var client = client(start(500, "{\"error\":\"should not be called\"}"), "test-key", "claude-test");
+
+        AiEvaluationResult r = client.evaluate(PracticeExamType.WRITING, "Describe the chart",
+                "Biểu đồ cho thấy số lượng sinh viên tăng mạnh trong năm qua", ScoringScale.IELTS);
+
+        assertEquals("0.0", r.bandScore().toPlainString());
+        assertEquals("0.0", r.taskAchievement().band().toPlainString());
+        assertEquals("rule-based", r.model());
+        assertEquals(null, path.get());
+    }
+
+    @Test
+    void blankAnswerScoresZero() throws Exception {
+        var client = client(start(500, "{}"), "test-key", "claude-test");
+
+        AiEvaluationResult r = client.evaluate(PracticeExamType.SPEAKING, "Talk about your hobby", "   ", ScoringScale.IELTS);
+
+        assertEquals("0.0", r.bandScore().toPlainString());
+        assertEquals(null, path.get());
+    }
+
+    @Test
+    void parsesWeaknessesAndPronunciationIssues() throws Exception {
+        String result = """
+                {"band_score": 5, "cefr_level": "B1",
+                 "task_achievement": {"band": 5, "comment": "a"},
+                 "coherence_cohesion": {"band": 5, "comment": "b"},
+                 "lexical_resource": {"band": 5, "comment": "c"},
+                 "grammatical_accuracy": {"band": 4.5, "comment": "d"},
+                 "feedback": "f", "weaknesses": ["Sai thì \\"I go\\""], "suggestions": ["s"],
+                 "pronunciation_issues": [{"word": "think", "heard_as": "sink", "tip": "âm /θ/"}, {"word": " "}]}""";
+        var client = client(start(200, claudeReply(result)), "test-key", "claude-test");
+
+        AiEvaluationResult r = client.evaluate(PracticeExamType.SPEAKING, "q", "I sink it is good", ScoringScale.IELTS);
+
+        assertEquals(1, r.weaknesses().size());
+        assertEquals(1, r.pronunciationIssues().size());
+        assertEquals("sink", r.pronunciationIssues().get(0).heardAs());
+    }
 }

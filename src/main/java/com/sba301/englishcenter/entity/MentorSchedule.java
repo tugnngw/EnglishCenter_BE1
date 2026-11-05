@@ -23,8 +23,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * Bảng mentor_schedules: slot thời gian rảnh do mentor mở (AvailabilitySlot - TASK D5-01).
- * Học viên đặt slot được lưu ở bảng bookings ({@link Booking}), cột student_id của bảng này không dùng nữa.
+ * Bảng mentor_schedules: 1 buổi kèm 1-1 thuộc gói của 1 học viên ({@link MentoringPlan}, V21).
+ * Không còn slot công khai: mentor chỉ tạo buổi bên trong gói đã tư vấn, buổi dành riêng cho student_id.
+ * Lượt học của buổi lưu ở bảng bookings ({@link Booking}).
  * mentor_id lưu UUID (không map quan hệ sang User để không phụ thuộc entity của Dev 1).
  * start_time / end_time lưu giờ UTC (TASK D5-19).
  * Trạng thái: available = đang mở, booked = đã có người đặt, cancelled = mentor đóng slot, completed = đã dạy xong.
@@ -45,6 +46,14 @@ public class MentorSchedule extends BaseEntity {
 
     @Column(name = "mentor_id", nullable = false)
     private UUID mentorId;
+
+    // Học viên được giữ buổi này (V1, dùng lại từ V21)
+    @Column(name = "student_id")
+    private UUID studentId;
+
+    // Gói kèm 1-1 chứa buổi này (V21)
+    @Column(name = "plan_id")
+    private UUID planId;
 
     @Column(name = "start_time", nullable = false)
     private LocalDateTime startTime;

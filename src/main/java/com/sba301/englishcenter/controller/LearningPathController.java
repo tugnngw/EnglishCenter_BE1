@@ -7,6 +7,7 @@ import com.sba301.englishcenter.dto.response.LearningPathResponse;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.security.SecurityUtils;
+import com.sba301.englishcenter.service.LearnerGoalResolver;
 import com.sba301.englishcenter.service.LearningPathService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -31,13 +32,19 @@ import java.util.UUID;
 public class LearningPathController {
 
     private final LearningPathService learningPathService;
+    private final LearnerGoalResolver learnerGoalResolver;
 
     @GetMapping("/learning-paths")
-    @Operation(summary = "Danh sách lộ trình (public)", description = "Lọc theo certificateId nếu có")
+    @Operation(summary = "Danh sách lộ trình (public)",
+            description = "Lọc theo certificateId nếu có. Learner / Student chỉ thấy lộ trình của chứng chỉ mục tiêu")
     public PageResponse<LearningPathResponse> getLearningPaths(
             @RequestParam(required = false) UUID certificateId,
             @PageableDefault(size = 10) Pageable pageable) {
-        return learningPathService.getLearningPaths(certificateId, pageable);
+        // Learner / Student: luôn lọc theo chứng chỉ mục tiêu trong hồ sơ, không sổ hết lộ trình ra (Dev 5)
+        UUID goalCertificateId = learnerGoalResolver.currentLearnerGoal()
+                .map(LearnerGoalResolver.LearnerGoal::certificateId)
+                .orElse(null);
+        return learningPathService.getLearningPaths(goalCertificateId != null ? goalCertificateId : certificateId, pageable);
     }
 
     @GetMapping("/learning-paths/{learningPathId}")

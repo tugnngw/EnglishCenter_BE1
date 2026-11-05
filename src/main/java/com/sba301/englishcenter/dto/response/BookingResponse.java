@@ -22,6 +22,8 @@ public class BookingResponse {
 
     private UUID bookingId;
     private UUID scheduleId;
+    // Gói kèm 1-1 chứa buổi này (V21)
+    private UUID planId;
     private UUID mentorId;
     private String mentorName;
     private UUID studentId;

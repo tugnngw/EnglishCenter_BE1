@@ -166,6 +166,23 @@ public enum ErrorCode {
     AI_NOT_CONFIGURED(6027, "Chưa cấu hình dịch vụ AI chấm bài", HttpStatus.SERVICE_UNAVAILABLE),
     AI_EVALUATION_FAILED(6028, "AI chấm bài thất bại, vui lòng thử lại sau", HttpStatus.BAD_GATEWAY),
     PRACTICE_ATTEMPT_LIMIT(6029, "Bạn đã dùng hết 3 lượt test miễn phí", HttpStatus.FORBIDDEN),
+    // Dev 5: validate giờ buổi kèm 1-1
+    SCHEDULE_IN_PAST(6030, "Giờ bắt đầu phải ở tương lai", HttpStatus.BAD_REQUEST),
+    SCHEDULE_TOO_FAR(6031, "Chỉ được xếp lịch trong %d ngày tới", HttpStatus.BAD_REQUEST),
+    SCHEDULE_DURATION_INVALID(6032, "Mỗi buổi phải dài từ %d đến %d phút", HttpStatus.BAD_REQUEST),
+    // Dev 5: gói kèm 1-1 theo lộ trình
+    MENTORING_PLAN_NOT_FOUND(6033, "Không tìm thấy gói kèm 1-1", HttpStatus.NOT_FOUND),
+    MENTORING_PLAN_STATUS_INVALID(6034, "Gói kèm 1-1 ở trạng thái này không thể thực hiện thao tác", HttpStatus.BAD_REQUEST),
+    MENTORING_PLAN_SESSION_COUNT_INVALID(6035, "Số buổi không hợp lệ (lộ trình yêu cầu %d buổi)", HttpStatus.BAD_REQUEST),
+    MENTORING_PLAN_EXPIRED(6036, "Buổi đầu tiên của gói đã qua, vui lòng liên hệ mentor để xếp lại lịch", HttpStatus.BAD_REQUEST),
+    MENTORING_PLAN_STUDENT_INVALID(6037, "Chỉ tạo gói cho tài khoản học viên (USER / STUDENT)", HttpStatus.BAD_REQUEST),
+    BOOKING_IN_PENDING_PLAN(6038, "Buổi thuộc gói chưa thanh toán, hãy thanh toán hoặc từ chối cả gói", HttpStatus.BAD_REQUEST),
+    // Dev 5: tư vấn lộ trình
+    CONSULTATION_NOT_FOUND(6039, "Không tìm thấy yêu cầu tư vấn", HttpStatus.NOT_FOUND),
+    CONSULTATION_TAKEN(6040, "Yêu cầu tư vấn đã có mentor khác nhận", HttpStatus.CONFLICT),
+    CONSULTATION_STATUS_INVALID(6041, "Trạng thái yêu cầu tư vấn không hợp lệ", HttpStatus.BAD_REQUEST),
+    COURSE_SCORE_RANGE_INVALID(6043, "Điểm đầu vào phải nhỏ hơn điểm mục tiêu của khóa học", HttpStatus.BAD_REQUEST),
+    LEARNING_PATH_FORBIDDEN(6042, "Bạn chỉ được sửa / xóa lộ trình do mình tạo", HttpStatus.FORBIDDEN),
     ;
 
     private final int code;

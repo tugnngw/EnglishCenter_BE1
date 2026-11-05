@@ -31,6 +31,9 @@ public interface BookingRepository extends JpaRepository<Booking, UUID>, JpaSpec
     List<Booking> findByStatusAndReminderSentAtIsNullAndSchedule_StartTimeGreaterThanAndSchedule_StartTimeLessThanEqual(
             BookingStatus status, LocalDateTime from, LocalDateTime to);
 
-    // Slot còn booking nào khác status truyền vào (vd khác cancelled) không - dùng khi xóa slot
-    boolean existsBySchedule_ScheduleIdAndStatusNot(UUID scheduleId, BookingStatus status);
+    // Các buổi (booking) của 1 gói kèm 1-1, theo giờ bắt đầu (V21)
+    List<Booking> findBySchedule_PlanIdOrderBySchedule_StartTimeAsc(UUID planId);
+
+    // Gói còn buổi nào chưa kết thúc (pending / confirmed) không
+    boolean existsBySchedule_PlanIdAndStatusIn(UUID planId, Collection<BookingStatus> statuses);
 }

@@ -25,6 +25,9 @@ public interface LearningPathService {
     /** Không xóa được khi đã có học viên ghi danh. */
     void delete(UUID learningPathId);
 
+    /** Mentor chỉ sửa / xóa lộ trình do mình tạo; Admin sửa được mọi lộ trình. Không được thì LEARNING_PATH_FORBIDDEN. */
+    void checkCanManage(UUID userId, boolean isAdmin, UUID learningPathId);
+
     /** Ghi danh (gọi lại nhiều lần vẫn chỉ 1 bản ghi), trả về tiến độ hiện tại. */
     LearningPathProgressResponse enroll(UUID studentId, UUID learningPathId);
 

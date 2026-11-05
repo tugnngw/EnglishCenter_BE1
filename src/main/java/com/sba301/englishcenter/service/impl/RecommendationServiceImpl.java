@@ -1,46 +1,58 @@
 package com.sba301.englishcenter.service.impl;
 
-import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.CourseStatus;
 import com.sba301.englishcenter.dto.response.CourseResponse;
-import com.sba301.englishcenter.dto.response.LearningPathResponse;
 import com.sba301.englishcenter.dto.response.RecommendationResponse;
 import com.sba301.englishcenter.entity.Certificate;
 import com.sba301.englishcenter.entity.CertificatePart;
 import com.sba301.englishcenter.entity.Course;
 import com.sba301.englishcenter.entity.StudentProfile;
 import com.sba301.englishcenter.entity.User;
+import com.sba301.englishcenter.integration.ai.ScoringScale;
 import com.sba301.englishcenter.repository.CertificateRepository;
 import com.sba301.englishcenter.repository.CourseRepository;
 import com.sba301.englishcenter.repository.StudentProfileRepository;
-import com.sba301.englishcenter.service.LearningPathService;
 import com.sba301.englishcenter.service.RecommendationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Gợi ý khóa học & lộ trình học cá nhân hóa cho học viên (TASK-DEV1 T8).
+ * Gợi ý khóa học cá nhân hóa cho học viên (TASK-DEV1 T8).
+ * Không gợi ý lộ trình: lộ trình do mentor tư vấn riêng trong khóa học / gói kèm 1-1 (learningPaths luôn rỗng).
+ * <p>
+ * Khóa "vừa sức" (Dev 5 sửa lỗi band 1.0 vẫn gợi ý khóa 4.0 - 5.0, 5.0 - 6.0):
+ * <ol>
+ *     <li>đúng chứng chỉ mục tiêu, đang mở bán;</li>
+ *     <li>điểm đầu vào (entry_score) &le; điểm hiện tại + 1 bước thang (IELTS: 0.5);</li>
+ *     <li>điểm mục tiêu của khóa &gt; điểm hiện tại (khóa đã vượt qua thì bỏ);</li>
+ *     <li>điểm đầu vào &lt; điểm mục tiêu của học viên;</li>
+ *     <li>khóa gần trình độ nhất lên trước (entry cao nhất mà vẫn vừa sức).</li>
+ * </ol>
+ * Khóa chưa có entry_score thì không gợi ý (không biết có vừa sức không).
+ * Chưa có điểm test level -> không gợi ý khóa nào (không đoán trình độ).
+ * Không có khóa nào vừa sức -> danh sách rỗng + needConsultation = true: FE báo "chưa có khóa phù hợp",
+ * admin bổ sung khóa dần; học viên có thể để lại SĐT cho mentor.
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class RecommendationServiceImpl implements RecommendationService {
 
+    private static final int MAX_COURSES = 6;
+
     private final StudentProfileRepository studentProfileRepository;
     private final CertificateRepository certificateRepository;
     private final CourseRepository courseRepository;
-    private final LearningPathService learningPathService;
+    private final ScoringScaleResolver scoringScaleResolver;
 
     @Override
     @Transactional(readOnly = true)
@@ -58,15 +70,15 @@ public class RecommendationServiceImpl implements RecommendationService {
                     .orElse(null);
         }
 
-        // 1. Gợi ý khóa học
-        List<CourseResponse> recommendedCourses = findRecommendedCourses(targetCertId, currentScore, targetScore);
+        // 1. Gợi ý khóa học vừa sức
+        List<Course> activeOfCert = findActiveCourses(targetCertId);
+        List<Course> fitting = findFittingCourses(userId, activeOfCert, currentScore, targetScore);
+        List<CourseResponse> recommendedCourses = fitting.stream().map(this::toCourseResponse).toList();
+        boolean needConsultation = currentScore != null && recommendedCourses.isEmpty();
 
-        // 2. Gợi ý lộ trình
-        List<LearningPathResponse> recommendedPaths = findRecommendedLearningPaths(targetCertId);
-
-        // 3. Tóm tắt đề xuất
+        // 2. Tóm tắt đề xuất
         String summary = buildSummary(certName, currentLevel, currentScore, targetScore,
-                recommendedCourses.size(), recommendedPaths.size());
+                recommendedCourses.size(), needConsultation, lowestEntry(activeOfCert));
 
         return RecommendationResponse.builder()
                 .targetCertificateId(targetCertId)
@@ -75,71 +87,51 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .currentLevel(currentLevel)
                 .targetScore(targetScore)
                 .courses(recommendedCourses)
-                .learningPaths(recommendedPaths)
+                .learningPaths(List.of())
                 .summary(summary)
+                .needConsultation(needConsultation)
                 .build();
     }
 
-    private List<CourseResponse> findRecommendedCourses(UUID targetCertId, BigDecimal currentScore, BigDecimal targetScore) {
+    private List<Course> findActiveCourses(UUID targetCertId) {
         Specification<Course> spec = (root, query, cb) -> cb.equal(root.get("status"), CourseStatus.active);
         List<Course> published = courseRepository.findAll(spec);
-
-        if (published.isEmpty()) {
-            return List.of();
+        if (targetCertId == null) {
+            return published;
         }
-
-        if (targetCertId != null) {
-            List<Course> matchingCert = published.stream()
-                    .filter(c -> c.getCertificate() != null && targetCertId.equals(c.getCertificate().getCertificateId()))
-                    .toList();
-
-            if (!matchingCert.isEmpty()) {
-                if (currentScore != null && targetScore != null) {
-                    // Ưu tiên các khóa học có targetScore nằm trong khoảng [currentScore, targetScore]
-                    List<Course> inRange = matchingCert.stream()
-                            .filter(c -> c.getTargetScore() != null
-                                    && c.getTargetScore().compareTo(currentScore.subtract(BigDecimal.valueOf(0.5))) >= 0
-                                    && c.getTargetScore().compareTo(targetScore.add(BigDecimal.valueOf(1.0))) <= 0)
-                            .sorted(Comparator.comparing(Course::getTargetScore, Comparator.nullsLast(Comparator.naturalOrder())))
-                            .toList();
-
-                    if (!inRange.isEmpty()) {
-                        return inRange.stream().map(this::toCourseResponse).toList();
-                    }
-                }
-                return matchingCert.stream().map(this::toCourseResponse).toList();
-            }
-        }
-
-        // Fallback: trả về top 6 khóa học bất kỳ
         return published.stream()
-                .limit(6)
-                .map(this::toCourseResponse)
+                .filter(c -> c.getCertificate() != null && targetCertId.equals(c.getCertificate().getCertificateId()))
                 .toList();
     }
 
-    private List<LearningPathResponse> findRecommendedLearningPaths(UUID targetCertId) {
-        try {
-            PageResponse<LearningPathResponse> page = learningPathService.getLearningPaths(
-                    targetCertId, PageRequest.of(0, 10));
-            if (page != null && page.getData() != null && !page.getData().isEmpty()) {
-                return page.getData();
-            }
-            if (targetCertId != null) {
-                // Nếu chứng chỉ này chưa có lộ trình, thử lấy lộ trình chung
-                PageResponse<LearningPathResponse> fallback = learningPathService.getLearningPaths(
-                        null, PageRequest.of(0, 5));
-                return fallback != null && fallback.getData() != null ? fallback.getData() : List.of();
-            }
-            return List.of();
-        } catch (Exception ex) {
-            log.warn("Error fetching recommended learning paths: {}", ex.getMessage());
+    private List<Course> findFittingCourses(UUID userId, List<Course> courses, BigDecimal currentScore,
+                                            BigDecimal targetScore) {
+        // Chưa có điểm test level -> chưa biết trình độ, không đoán (tránh gợi ý khóa quá sức)
+        if (courses.isEmpty() || currentScore == null) {
             return List.of();
         }
+        ScoringScale scale = scoringScaleResolver.resolve(userId, (String) null);
+        BigDecimal maxEntry = currentScore.add(scale.step());
+        return courses.stream()
+                .filter(c -> c.getEntryScore() != null && c.getEntryScore().compareTo(maxEntry) <= 0)
+                .filter(c -> c.getTargetScore() == null || c.getTargetScore().compareTo(currentScore) > 0)
+                .filter(c -> targetScore == null || c.getEntryScore().compareTo(targetScore) < 0)
+                .sorted(Comparator.comparing(Course::getEntryScore, Comparator.reverseOrder())
+                        .thenComparing(Course::getTargetScore, Comparator.nullsLast(Comparator.naturalOrder())))
+                .limit(MAX_COURSES)
+                .toList();
+    }
+
+    private static BigDecimal lowestEntry(List<Course> courses) {
+        return courses.stream()
+                .map(Course::getEntryScore)
+                .filter(s -> s != null)
+                .min(Comparator.naturalOrder())
+                .orElse(null);
     }
 
     private String buildSummary(String certName, String currentLevel, BigDecimal currentScore, BigDecimal targetScore,
-                                int courseCount, int pathCount) {
+                                int courseCount, boolean needConsultation, BigDecimal lowestEntry) {
         StringBuilder sb = new StringBuilder();
         if (certName != null) {
             sb.append("Dành cho mục tiêu ").append(certName);
@@ -157,10 +149,21 @@ public class RecommendationServiceImpl implements RecommendationService {
             }
             sb.append(": ");
         } else {
-            sb.append("Khóa học và lộ trình nổi bật: ");
+            sb.append("Bạn chưa chọn chứng chỉ mục tiêu, hãy cập nhật nguyện vọng trong hồ sơ để được gợi ý đúng. ");
         }
-        sb.append("Gợi ý ").append(courseCount).append(" khóa học phù hợp và ")
-                .append(pathCount).append(" lộ trình tối ưu.");
+        if (currentScore == null) {
+            sb.append("Bạn chưa có kết quả test trình độ, hãy làm test để được gợi ý khóa học vừa sức.");
+            return sb.toString();
+        }
+        if (needConsultation) {
+            sb.append("Chưa có khóa học phù hợp với trình độ của bạn");
+            if (lowestEntry != null) {
+                sb.append(" (khóa thấp nhất yêu cầu đầu vào ").append(formatScore(lowestEntry)).append(")");
+            }
+            sb.append(".");
+            return sb.toString();
+        }
+        sb.append("Gợi ý ").append(courseCount).append(" khóa học vừa sức.");
         return sb.toString();
     }
 
@@ -183,6 +186,7 @@ public class RecommendationServiceImpl implements RecommendationService {
                 .level(course.getLevel())
                 .price(course.getPrice())
                 .targetScore(course.getTargetScore())
+                .entryScore(course.getEntryScore())
                 .thumbnailUrl(course.getThumbnailUrl())
                 .status(course.getStatus() != null ? course.getStatus().getValue() : null)
                 .certificateId(certificate != null ? certificate.getCertificateId() : null)

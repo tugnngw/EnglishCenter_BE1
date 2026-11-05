@@ -7,6 +7,7 @@ import java.util.List;
 /**
  * Kết quả AI chấm một câu Writing / Speaking của đề luyện tập (cột exam_attempt_details.ai_evaluation).
  * bandScore theo thang chứng chỉ mục tiêu [minScore, maxScore]; điểm câu = points * (band - min) / (max - min).
+ * weaknesses: điểm yếu cụ thể; pronunciationIssues: từ nghi phát âm sai (Speaking). Bản ghi cũ không có 2 trường này (null).
  *
  * @param skill WRITING | SPEAKING
  */
@@ -23,5 +24,7 @@ public record EssayAiEvaluationData(String skill,
                                     String feedback,
                                     List<String> suggestions,
                                     String model,
-                                    LocalDateTime evaluatedAt) {
+                                    LocalDateTime evaluatedAt,
+                                    List<String> weaknesses,
+                                    List<PronunciationIssueData> pronunciationIssues) {
 }

@@ -10,6 +10,7 @@ import com.sba301.englishcenter.security.UserPrincipal;
 import com.sba301.englishcenter.security.jwt.JwtAccessDeniedHandler;
 import com.sba301.englishcenter.security.jwt.JwtAuthenticationEntryPoint;
 import com.sba301.englishcenter.security.jwt.JwtTokenProvider;
+import com.sba301.englishcenter.service.LearnerGoalResolver;
 import com.sba301.englishcenter.service.LearningPathService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,8 @@ class LearningPathControllerTest {
 
     @MockitoBean
     private LearningPathService learningPathService;
+    @MockitoBean
+    private LearnerGoalResolver learnerGoalResolver;
     @MockitoBean
     private JwtTokenProvider jwtTokenProvider;
     @MockitoBean

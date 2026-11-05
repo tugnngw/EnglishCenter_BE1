@@ -50,6 +50,8 @@ public class AdminExamController {
     // ============================================
 
     @GetMapping("/exams")
+    // Dev 5: Mentor cũng cần danh sách đề để chọn chặng EXAM / PRACTICE_EXAM khi tự tạo lộ trình (chỉ xem)
+    @PreAuthorize("hasAnyRole('ADMIN', 'MENTOR')")
     @Operation(summary = "List exams (admin)", description = "All statuses; filter by status, examType, examScope, "
             + "certificateId, courseId, level, difficulty, isFree, keyword")
     public PageResponse<ExamSummaryResponse> getExams(

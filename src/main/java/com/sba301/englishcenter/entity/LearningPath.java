@@ -49,6 +49,10 @@ public class LearningPath extends BaseEntity {
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
 
+    // Số buổi kèm 1-1 của lộ trình (VD 12 buổi) - gói kèm 1-1 theo lộ trình phải có đúng số buổi này (V21)
+    @Column(name = "total_sessions")
+    private Integer totalSessions;
+
     @Column(name = "items", columnDefinition = "jsonb")
     @ColumnTransformer(write = "cast(? as jsonb)")
     private String items;

@@ -25,4 +25,6 @@ public class RecommendationResponse {
     private List<CourseResponse> courses;
     private List<LearningPathResponse> learningPaths;
     private String summary;
+    // true = không có khóa vừa sức với trình độ hiện tại -> FE mời để lại SĐT nhờ mentor tư vấn
+    private boolean needConsultation;
 }

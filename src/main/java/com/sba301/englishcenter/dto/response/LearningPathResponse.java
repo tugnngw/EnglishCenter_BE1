@@ -20,6 +20,10 @@ public class LearningPathResponse {
     private UUID certificateId;
     private String name;
     private String description;
+    // Số buổi kèm 1-1 của lộ trình (null = không quy định)
+    private Integer totalSessions;
+    // Người tạo (Admin hoặc Mentor) - Mentor chỉ sửa / xóa lộ trình của mình
+    private UUID createdByUserId;
     private int totalItems;
     private int enrolledCount;
     private List<LearningPathItemResponse> items;

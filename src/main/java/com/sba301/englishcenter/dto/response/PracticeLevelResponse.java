@@ -32,6 +32,8 @@ public class PracticeLevelResponse {
     /** A1 – C2 */
     String cefrLevel;
     List<SkillLevel> skills;
+    /** Dev 5: giải thích vì sao ra điểm tổng này (cách tính, kỹ năng kéo điểm xuống, kỹ năng bỏ trống) */
+    List<String> summary;
 
     @Getter
     @Setter
@@ -51,5 +53,29 @@ public class PracticeLevelResponse {
         String name;
         /** true = điểm riêng, không tính vào điểm tổng (VD Aptis Core) */
         Boolean excludeFromTotal;
+        /** Dev 5: số câu của kỹ năng / số câu có trả lời / số câu đúng (câu trắc nghiệm, điền từ, nối) */
+        Integer questionCount;
+        Integer answeredCount;
+        Integer correctCount;
+        /** Dev 5: nhận xét kỹ năng (đúng bao nhiêu câu, yếu ở part nào / tiêu chí nào) */
+        String comment;
+        /** Dev 5: kết quả từng part (section) của kỹ năng */
+        List<PartResult> parts;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    @FieldDefaults(level = AccessLevel.PRIVATE)
+    public static class PartResult {
+        /** Tên section (VD "Listening Part 2") */
+        String name;
+        int questionCount;
+        int answeredCount;
+        /** Số câu đúng (chỉ câu chấm tự động); null nếu part toàn câu tự luận */
+        Integer correctCount;
+        BigDecimal percentage;
     }
 }

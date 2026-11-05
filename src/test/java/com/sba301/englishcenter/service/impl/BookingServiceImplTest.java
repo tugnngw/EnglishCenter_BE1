@@ -4,12 +4,9 @@ import com.sba301.englishcenter.common.enums.BookingStatus;
 import com.sba301.englishcenter.common.enums.PaymentOrderStatus;
 import com.sba301.englishcenter.common.enums.PaymentOrderType;
 import com.sba301.englishcenter.common.enums.ScheduleStatus;
-import com.sba301.englishcenter.dto.request.BookScheduleRequest;
 import com.sba301.englishcenter.dto.request.CancelBookingRequest;
-import com.sba301.englishcenter.dto.request.RescheduleBookingRequest;
 import com.sba301.englishcenter.dto.request.UpdateBookingStatusRequest;
 import com.sba301.englishcenter.dto.response.BookingResponse;
-import com.sba301.englishcenter.dto.response.MentorResponse;
 import com.sba301.englishcenter.dto.response.PaymentOrderResponse;
 import com.sba301.englishcenter.dto.response.UserResponse;
 import com.sba301.englishcenter.entity.Booking;
@@ -18,8 +15,8 @@ import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.repository.BookingRepository;
 import com.sba301.englishcenter.repository.MentorScheduleRepository;
+import com.sba301.englishcenter.repository.MentoringPlanRepository;
 import com.sba301.englishcenter.repository.PaymentOrderRepository;
-import com.sba301.englishcenter.service.MentorService;
 import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.service.PaymentService;
 import com.sba301.englishcenter.service.UserService;
@@ -63,9 +60,6 @@ class BookingServiceImplTest {
     private MentorScheduleRepository mentorScheduleRepository;
 
     @Mock
-    private MentorService mentorService;
-
-    @Mock
     private UserService userService;
 
     @Mock
@@ -76,6 +70,9 @@ class BookingServiceImplTest {
 
     @Mock
     private PaymentOrderRepository paymentOrderRepository;
+
+    @Mock
+    private MentoringPlanRepository mentoringPlanRepository;
 
     @InjectMocks
     private BookingServiceImpl bookingService;
@@ -93,7 +90,6 @@ class BookingServiceImplTest {
         // Họ tên dùng để ghi thông báo / response, không phải test nào cũng cần
         lenient().when(userService.getUserById(any()))
                 .thenAnswer(inv -> UserResponse.builder().userId(inv.getArgument(0)).fullName("User").build());
-        lenient().when(mentorService.getMentorById(any())).thenReturn(MentorResponse.builder().userId(mentorId).build());
         // Đơn SePay Dev 4 tạo cho booking pending
         lenient().when(paymentService.createMentorSessionOrder(any(), any(), any(), anyString()))
                 .thenAnswer(inv -> sessionOrder(inv.getArgument(1), inv.getArgument(2)));
@@ -136,21 +132,9 @@ class BookingServiceImplTest {
                 .build();
     }
 
-    private BookScheduleRequest bookRequest(UUID scheduleId) {
-        BookScheduleRequest request = new BookScheduleRequest();
-        request.setScheduleId(scheduleId);
-        return request;
-    }
-
     private CancelBookingRequest cancelRequest(String reason) {
         CancelBookingRequest request = new CancelBookingRequest();
         request.setReason(reason);
-        return request;
-    }
-
-    private RescheduleBookingRequest rescheduleRequest(UUID newScheduleId) {
-        RescheduleBookingRequest request = new RescheduleBookingRequest();
-        request.setNewScheduleId(newScheduleId);
         return request;
     }
 
@@ -161,105 +145,6 @@ class BookingServiceImplTest {
     }
 
     // ===================== book =====================
-
-    @Test
-    @DisplayName("Đặt slot: khóa dòng slot, booking pending, slot booked (giữ chỗ), tạo đơn SePay theo giá slot, chưa gửi thông báo")
-    void book_success() {
-        MentorSchedule schedule = slot(ScheduleStatus.available, 48, mentorId);
-        when(mentorScheduleRepository.findWithLockByScheduleId(schedule.getScheduleId()))
-                .thenReturn(Optional.of(schedule));
-
-        BookingResponse response = bookingService.book(studentId, bookRequest(schedule.getScheduleId()));
-
-        ArgumentCaptor<Booking> captor = ArgumentCaptor.forClass(Booking.class);
-        verify(bookingRepository).save(captor.capture());
-        assertThat(captor.getValue().getStatus()).isEqualTo(BookingStatus.pending);
-        assertThat(captor.getValue().getStudentId()).isEqualTo(studentId);
-        assertThat(captor.getValue().getMentorId()).isEqualTo(mentorId);
-        assertThat(schedule.getStatus()).isEqualTo(ScheduleStatus.booked);
-        assertThat(response.getStatus()).isEqualTo("pending");
-        assertThat(response.getPaymentOrderCode()).isEqualTo(ORDER_CODE);
-        assertThat(response.getStartTime()).isEqualTo(UtcTimeUtil.toInstant(schedule.getStartTime()));
-        verify(mentorScheduleRepository, never()).findById(any());
-        verify(paymentService).createMentorSessionOrder(eq(studentId), eq(captor.getValue().getBookingId()),
-                eq(schedule.getPrice()), anyString());
-        // Thông báo "Đặt lịch thành công" chỉ gửi sau khi thanh toán (BookingPaymentServiceImpl)
-        verify(notificationService, never()).notifyMentorSession(any(), anyString(), anyString(), any(), any());
-    }
-
-    @Test
-    @DisplayName("Giá slot lẻ (không phải số nguyên VND) -> SESSION_PRICE_INVALID, không tạo booking")
-    void book_fractionalPrice() {
-        MentorSchedule schedule = slot(ScheduleStatus.available, 48, mentorId);
-        schedule.setPrice(new BigDecimal("83333.33"));
-        when(mentorScheduleRepository.findWithLockByScheduleId(schedule.getScheduleId()))
-                .thenReturn(Optional.of(schedule));
-
-        assertThatThrownBy(() -> bookingService.book(studentId, bookRequest(schedule.getScheduleId())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SESSION_PRICE_INVALID);
-        verify(bookingRepository, never()).save(any());
-        verify(paymentService, never()).createMentorSessionOrder(any(), any(), any(), anyString());
-        assertThat(schedule.getStatus()).isEqualTo(ScheduleStatus.available);
-    }
-
-    @Test
-    @DisplayName("Hai học viên đặt cùng 1 slot: người đặt sau thấy slot đã booked -> SCHEDULE_NOT_AVAILABLE")
-    void book_sameSlotTwice() {
-        // Cả 2 lượt đều đọc slot qua findWithLock (SELECT ... FOR UPDATE), lượt sau chờ lượt trước commit
-        MentorSchedule schedule = slot(ScheduleStatus.available, 48, mentorId);
-        when(mentorScheduleRepository.findWithLockByScheduleId(schedule.getScheduleId()))
-                .thenReturn(Optional.of(schedule));
-
-        bookingService.book(studentId, bookRequest(schedule.getScheduleId()));
-        UUID otherStudentId = UUID.randomUUID();
-
-        assertThatThrownBy(() -> bookingService.book(otherStudentId, bookRequest(schedule.getScheduleId())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SCHEDULE_NOT_AVAILABLE);
-        verify(bookingRepository, times(1)).save(any(Booking.class));
-        verify(mentorScheduleRepository, times(2)).findWithLockByScheduleId(schedule.getScheduleId());
-    }
-
-    @Test
-    @DisplayName("Slot đã qua giờ bắt đầu -> SCHEDULE_NOT_AVAILABLE")
-    void book_pastSlot() {
-        MentorSchedule schedule = slot(ScheduleStatus.available, -1, mentorId);
-        when(mentorScheduleRepository.findWithLockByScheduleId(schedule.getScheduleId()))
-                .thenReturn(Optional.of(schedule));
-
-        assertThatThrownBy(() -> bookingService.book(studentId, bookRequest(schedule.getScheduleId())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SCHEDULE_NOT_AVAILABLE);
-        verify(bookingRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("Slot không tồn tại -> SCHEDULE_NOT_FOUND")
-    void book_slotNotFound() {
-        UUID scheduleId = UUID.randomUUID();
-        when(mentorScheduleRepository.findWithLockByScheduleId(scheduleId)).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> bookingService.book(studentId, bookRequest(scheduleId)))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SCHEDULE_NOT_FOUND);
-    }
-
-    @Test
-    @DisplayName("Học viên đã có buổi khác trùng giờ -> SCHEDULE_TIME_CONFLICT")
-    void book_studentConflict() {
-        MentorSchedule schedule = slot(ScheduleStatus.available, 48, mentorId);
-        when(mentorScheduleRepository.findWithLockByScheduleId(schedule.getScheduleId()))
-                .thenReturn(Optional.of(schedule));
-        when(bookingRepository.existsByStudentIdAndStatusInAndSchedule_StartTimeLessThanAndSchedule_EndTimeGreaterThan(
-                eq(studentId), any(), eq(schedule.getEndTime()), eq(schedule.getStartTime()))).thenReturn(true);
-
-        assertThatThrownBy(() -> bookingService.book(studentId, bookRequest(schedule.getScheduleId())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SCHEDULE_TIME_CONFLICT);
-        verify(bookingRepository, never()).save(any());
-        assertThat(schedule.getStatus()).isEqualTo(ScheduleStatus.available);
-    }
 
     // ===================== cancel =====================
 
@@ -336,80 +221,6 @@ class BookingServiceImplTest {
     }
 
     // ===================== reschedule =====================
-
-    @Test
-    @DisplayName("Đổi lịch thành công: booking cũ cancelled + slot cũ mở lại, booking mới confirmed + slot mới booked")
-    void reschedule_success() {
-        MentorSchedule oldSchedule = slot(ScheduleStatus.booked, 48, mentorId);
-        MentorSchedule newSchedule = slot(ScheduleStatus.available, 72, mentorId);
-        Booking oldBooking = booking(oldSchedule, BookingStatus.confirmed);
-        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(oldBooking));
-        when(mentorScheduleRepository.findWithLockByScheduleId(newSchedule.getScheduleId()))
-                .thenReturn(Optional.of(newSchedule));
-        when(mentorScheduleRepository.findWithLockByScheduleId(oldSchedule.getScheduleId()))
-                .thenReturn(Optional.of(oldSchedule));
-
-        BookingResponse response = bookingService.reschedule(
-                studentId, bookingId, rescheduleRequest(newSchedule.getScheduleId()));
-
-        assertThat(oldBooking.getStatus()).isEqualTo(BookingStatus.cancelled);
-        assertThat(oldSchedule.getStatus()).isEqualTo(ScheduleStatus.available);
-        assertThat(newSchedule.getStatus()).isEqualTo(ScheduleStatus.booked);
-        assertThat(response.getStatus()).isEqualTo("confirmed");
-        assertThat(response.getScheduleId()).isEqualTo(newSchedule.getScheduleId());
-        assertThat(response.getRescheduledFromId()).isEqualTo(bookingId);
-        verify(notificationService, times(2)).notifyMentorSession(any(), anyString(), anyString(),
-                eq(newSchedule.getScheduleId()), any());
-    }
-
-    @Test
-    @DisplayName("Đổi sang slot của mentor khác -> RESCHEDULE_MENTOR_MISMATCH")
-    void reschedule_otherMentor() {
-        MentorSchedule oldSchedule = slot(ScheduleStatus.booked, 48, mentorId);
-        MentorSchedule newSchedule = slot(ScheduleStatus.available, 72, UUID.randomUUID());
-        Booking oldBooking = booking(oldSchedule, BookingStatus.confirmed);
-        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(oldBooking));
-        when(mentorScheduleRepository.findWithLockByScheduleId(newSchedule.getScheduleId()))
-                .thenReturn(Optional.of(newSchedule));
-
-        assertThatThrownBy(() -> bookingService.reschedule(
-                studentId, bookingId, rescheduleRequest(newSchedule.getScheduleId())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESCHEDULE_MENTOR_MISMATCH);
-        assertThat(oldBooking.getStatus()).isEqualTo(BookingStatus.confirmed);
-        assertThat(newSchedule.getStatus()).isEqualTo(ScheduleStatus.available);
-    }
-
-    @Test
-    @DisplayName("Slot mới trùng giờ với buổi khác của học viên -> SCHEDULE_TIME_CONFLICT")
-    void reschedule_conflict() {
-        MentorSchedule oldSchedule = slot(ScheduleStatus.booked, 48, mentorId);
-        MentorSchedule newSchedule = slot(ScheduleStatus.available, 72, mentorId);
-        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking(oldSchedule, BookingStatus.confirmed)));
-        when(mentorScheduleRepository.findWithLockByScheduleId(newSchedule.getScheduleId()))
-                .thenReturn(Optional.of(newSchedule));
-        when(bookingRepository
-                .existsByStudentIdAndBookingIdNotAndStatusInAndSchedule_StartTimeLessThanAndSchedule_EndTimeGreaterThan(
-                        eq(studentId), eq(bookingId), any(), any(), any())).thenReturn(true);
-
-        assertThatThrownBy(() -> bookingService.reschedule(
-                studentId, bookingId, rescheduleRequest(newSchedule.getScheduleId())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.SCHEDULE_TIME_CONFLICT);
-        verify(bookingRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("Đổi lịch khi đã quá hạn -> BOOKING_CANCEL_DEADLINE_PASSED")
-    void reschedule_deadlinePassed() {
-        MentorSchedule oldSchedule = slot(ScheduleStatus.booked, 2, mentorId);
-        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking(oldSchedule, BookingStatus.confirmed)));
-
-        assertThatThrownBy(() -> bookingService.reschedule(studentId, bookingId, rescheduleRequest(UUID.randomUUID())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BOOKING_CANCEL_DEADLINE_PASSED);
-        verify(mentorScheduleRepository, never()).findWithLockByScheduleId(any());
-    }
 
     // ===================== updateStatusByMentor =====================
 
@@ -491,36 +302,6 @@ class BookingServiceImplTest {
         bookingService.cancel(studentId, bookingId, null);
 
         verify(paymentService, never()).cancelPendingBookingOrder(any());
-    }
-
-    @Test
-    @DisplayName("Đổi lịch booking chưa thanh toán -> BOOKING_PAYMENT_PENDING")
-    void reschedule_pendingBooking() {
-        MentorSchedule oldSchedule = slot(ScheduleStatus.booked, 48, mentorId);
-        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(booking(oldSchedule, BookingStatus.pending)));
-
-        assertThatThrownBy(() -> bookingService.reschedule(studentId, bookingId, rescheduleRequest(UUID.randomUUID())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.BOOKING_PAYMENT_PENDING);
-        verify(mentorScheduleRepository, never()).findWithLockByScheduleId(any());
-    }
-
-    @Test
-    @DisplayName("Đổi sang slot khác giá -> RESCHEDULE_PRICE_MISMATCH, booking cũ giữ nguyên")
-    void reschedule_priceMismatch() {
-        MentorSchedule oldSchedule = slot(ScheduleStatus.booked, 48, mentorId);
-        MentorSchedule newSchedule = slot(ScheduleStatus.available, 72, mentorId);
-        newSchedule.setPrice(new BigDecimal("300000.00"));
-        Booking oldBooking = booking(oldSchedule, BookingStatus.confirmed);
-        when(bookingRepository.findById(bookingId)).thenReturn(Optional.of(oldBooking));
-        when(mentorScheduleRepository.findWithLockByScheduleId(newSchedule.getScheduleId()))
-                .thenReturn(Optional.of(newSchedule));
-
-        assertThatThrownBy(() -> bookingService.reschedule(studentId, bookingId, rescheduleRequest(newSchedule.getScheduleId())))
-                .isInstanceOf(AppException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RESCHEDULE_PRICE_MISMATCH);
-        assertThat(oldBooking.getStatus()).isEqualTo(BookingStatus.confirmed);
-        assertThat(newSchedule.getStatus()).isEqualTo(ScheduleStatus.available);
     }
 
     @Test

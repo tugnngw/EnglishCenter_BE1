@@ -4,9 +4,7 @@ import com.sba301.englishcenter.common.ApiResponse;
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.BookingStatus;
 import com.sba301.englishcenter.common.enums.RoleName;
-import com.sba301.englishcenter.dto.request.BookScheduleRequest;
 import com.sba301.englishcenter.dto.request.CancelBookingRequest;
-import com.sba301.englishcenter.dto.request.RescheduleBookingRequest;
 import com.sba301.englishcenter.dto.request.UpdateBookingStatusRequest;
 import com.sba301.englishcenter.dto.response.BookingResponse;
 import com.sba301.englishcenter.exception.AppException;
@@ -23,7 +21,6 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,13 +42,6 @@ public class BookingController {
 
     // ===================== STUDENT =====================
 
-    @PostMapping("/bookings")
-    @PreAuthorize("hasRole('STUDENT')")
-    @Operation(summary = "Học viên đặt slot", description = "Đặt 1 slot còn trống: booking pending, giữ slot và tạo đơn SePay (paymentOrderCode). Thanh toán xong booking mới confirmed")
-    public ApiResponse<BookingResponse> book(@Valid @RequestBody BookScheduleRequest request) {
-        return ApiResponse.success(bookingService.book(currentUserId(), request));
-    }
-
     @GetMapping("/bookings/{bookingId}")
     @Operation(summary = "Chi tiết lịch hẹn", description = "Chỉ học viên / mentor của lịch hẹn hoặc Admin")
     public ApiResponse<BookingResponse> getBooking(@PathVariable UUID bookingId) {
@@ -68,15 +58,6 @@ public class BookingController {
             @PathVariable UUID bookingId,
             @Valid @RequestBody(required = false) CancelBookingRequest request) {
         return ApiResponse.success(bookingService.cancel(currentUserId(), bookingId, request));
-    }
-
-    @PutMapping("/bookings/{bookingId}/reschedule")
-    @PreAuthorize("hasRole('STUDENT')")
-    @Operation(summary = "Đổi lịch hẹn", description = "Hủy lịch cũ và đặt slot mới của cùng mentor trong 1 transaction")
-    public ApiResponse<BookingResponse> reschedule(
-            @PathVariable UUID bookingId,
-            @Valid @RequestBody RescheduleBookingRequest request) {
-        return ApiResponse.success(bookingService.reschedule(currentUserId(), bookingId, request));
     }
 
     @GetMapping("/me/schedule")

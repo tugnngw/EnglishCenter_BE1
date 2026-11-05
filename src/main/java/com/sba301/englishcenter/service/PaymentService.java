@@ -23,4 +23,7 @@ public interface PaymentService {
     PaymentOrderResponse createMentorSessionOrder(UUID studentId, UUID bookingId, BigDecimal amount, String title);
     /** Hủy đơn đang chờ của booking (khi booking pending bị hủy). Không có đơn chờ thì bỏ qua. */
     void cancelPendingBookingOrder(UUID bookingId);
+    // Dev 5: đơn MENTOR_PLAN thanh toán 1 lần cả gói kèm 1-1; đã có đơn đang chờ thì trả lại đơn đó
+    PaymentOrderResponse createMentorPlanOrder(UUID studentId, UUID planId, BigDecimal amount, String title);
+    void cancelPendingPlanOrder(UUID planId);
 }

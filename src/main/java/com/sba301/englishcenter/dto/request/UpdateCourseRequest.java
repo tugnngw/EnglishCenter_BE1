@@ -36,6 +36,10 @@ public class UpdateCourseRequest {
     @PositiveOrZero(message = "Điểm mục tiêu phải lớn hơn hoặc bằng 0")
     BigDecimal targetScore;
 
+    // Điểm đầu vào (VD khóa 4.0 - 5.0 thì 4.0), phải nhỏ hơn điểm mục tiêu
+    @PositiveOrZero(message = "Điểm đầu vào phải lớn hơn hoặc bằng 0")
+    BigDecimal entryScore;
+
     @Size(max = 500, message = "URL ảnh không được vượt quá 500 ký tự")
     String thumbnailUrl;
 

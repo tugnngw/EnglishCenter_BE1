@@ -70,6 +70,9 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, UUID> 
     @EntityGraph(attributePaths = {"exam"})
     Page<ExamAttempt> findByStudent_UserIdAndExam_ExamScope(UUID studentId, ExamScope examScope, Pageable pageable);
 
+    // Dev 5: mentor xem số lượt test level (đề luyện tập) của học viên
+    long countByStudent_UserIdAndExam_ExamScope(UUID studentId, ExamScope examScope);
+
     /** Điểm trung bình các lượt thi đã nộp của một đề (cập nhật exams.average_score). */
     @Query("select coalesce(avg(a.score), 0) from ExamAttempt a "
             + "where a.exam.examId = :examId and a.status in :statuses")

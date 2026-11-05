@@ -103,10 +103,11 @@ public class LearningPathServiceImpl implements LearningPathService {
                 .createdByUserId(adminId)
                 .name(request.getName().trim())
                 .description(trimToNull(request.getDescription()))
+                .totalSessions(request.getTotalSessions())
                 .items(JsonbMapper.write(buildItems(request.getItems(), List.of())))
                 .studentProgress("[]")
                 .build());
-        log.info("Admin {} created learning path {}", adminId, path.getLearningPathId());
+        log.info("User {} created learning path {}", adminId, path.getLearningPathId());
         return toResponse(path);
     }
 
@@ -119,6 +120,7 @@ public class LearningPathServiceImpl implements LearningPathService {
         path.setCertificateId(request.getCertificateId());
         path.setName(request.getName().trim());
         path.setDescription(trimToNull(request.getDescription()));
+        path.setTotalSessions(request.getTotalSessions());
         // Giữ itemId của chặng cũ (cùng type + refId); tiến độ luôn tính lại theo dữ liệu thật nên không bị lệch
         path.setItems(JsonbMapper.write(buildItems(request.getItems(), itemsOf(path))));
         return toResponse(learningPathRepository.save(path));
@@ -133,6 +135,15 @@ public class LearningPathServiceImpl implements LearningPathService {
             throw new AppException(ErrorCode.LEARNING_PATH_HAS_STUDENTS);
         }
         learningPathRepository.delete(path);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public void checkCanManage(UUID userId, boolean isAdmin, UUID learningPathId) {
+        LearningPath path = findPath(learningPathId);
+        if (!isAdmin && !path.getCreatedByUserId().equals(userId)) {
+            throw new AppException(ErrorCode.LEARNING_PATH_FORBIDDEN);
+        }
     }
 
     // ===================== học viên =====================
@@ -322,6 +333,8 @@ public class LearningPathServiceImpl implements LearningPathService {
                 .certificateId(path.getCertificateId())
                 .name(path.getName())
                 .description(path.getDescription())
+                .totalSessions(path.getTotalSessions())
+                .createdByUserId(path.getCreatedByUserId())
                 .totalItems(items.size())
                 .enrolledCount(progressOf(path).size())
                 .items(items.stream().map(i -> toItemResponse(i, null)).toList())

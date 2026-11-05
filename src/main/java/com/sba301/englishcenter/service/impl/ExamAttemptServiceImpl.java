@@ -60,6 +60,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -309,6 +310,45 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     }
 
     // ============================================
+    // DEV 5: MENTOR XEM TEST LEVEL CỦA HỌC VIÊN (để tư vấn lộ trình)
+    // ============================================
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<AttemptSummaryResponse> getStudentLevelTests(UUID studentId, Pageable pageable) {
+        Page<ExamAttempt> page = attemptRepository.findByStudent_UserIdAndExam_ExamScope(studentId, ExamScope.PRACTICE,
+                PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), Sort.by(Sort.Direction.DESC, "startTime")));
+        return PageResponse.<AttemptSummaryResponse>builder()
+                .currentPage(page.getNumber())
+                .pageSize(page.getSize())
+                .totalPages(page.getTotalPages())
+                .totalElements(page.getTotalElements())
+                .data(page.getContent().stream()
+                        .map(a -> examMapper.toAttemptSummary(a, true, hasPendingManual(a), false))
+                        .toList())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AttemptResultResponse getStudentLevelTestResult(UUID studentId, UUID attemptId) {
+        ExamAttempt attempt = attemptRepository.findById(attemptId)
+                .orElseThrow(() -> new AppException(ErrorCode.ATTEMPT_NOT_FOUND));
+        // Chỉ lượt test level (đề luyện tập) đã nộp của đúng học viên này
+        if (!attempt.getStudent().getUserId().equals(studentId)
+                || attempt.getExam().getExamScope() != ExamScope.PRACTICE) {
+            throw new AppException(ErrorCode.ATTEMPT_NOT_FOUND);
+        }
+        if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) {
+            throw new AppException(ErrorCode.ATTEMPT_NOT_SUBMITTED);
+        }
+        List<ExamQuestion> examQuestions = examQuestionRepository.findDetailedByExamId(attempt.getExam().getExamId());
+        Map<UUID, ExamAnswer> answers = answersByQuestion(attemptId);
+        return withPracticeLevel(examMapper.toResult(attempt, examQuestions, answers, false),
+                attempt, examQuestions, answers);
+    }
+
+    // ============================================
     // TIMEOUT SWEEPER
     // ============================================
 
@@ -457,7 +497,7 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
             answer.setAiEvaluation(JsonbMapper.write(new EssayAiEvaluationData(grade.task().skill().name(),
                     r.bandScore(), r.cefrLevel(), scale.certificateName(), scale.minScore(), scale.maxScore(),
                     r.taskAchievement(), r.coherenceCohesion(), r.lexicalResource(), r.grammaticalAccuracy(),
-                    r.feedback(), r.suggestions(), r.model(), now)));
+                    r.feedback(), r.suggestions(), r.model(), now, r.weaknesses(), r.pronunciationIssues())));
             answer.setGradedDate(now);
             saved++;
         }

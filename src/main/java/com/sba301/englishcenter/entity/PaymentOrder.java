@@ -15,10 +15,11 @@ public class PaymentOrder {
     @Id private UUID orderId;
     @Column(nullable = false, unique = true) private String orderCode;
     @Column(nullable = false) private UUID studentId;
-    // COURSE: courseId bắt buộc. MENTOR_SESSION: courseId null, bookingId bắt buộc (V7)
+    // COURSE: courseId bắt buộc. MENTOR_SESSION: bookingId bắt buộc (V7). MENTOR_PLAN: planId bắt buộc (V21)
     @Enumerated(EnumType.STRING) @Builder.Default private PaymentOrderType orderType = PaymentOrderType.COURSE;
     private UUID courseId;
     private UUID bookingId;
+    private UUID planId;
     // Tên hiển thị của đơn: tên khóa học hoặc "Buổi kèm 1-1 với mentor ..."
     private String courseTitle;
     private BigDecimal amount;

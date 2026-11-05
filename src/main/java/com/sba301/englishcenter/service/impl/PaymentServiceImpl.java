@@ -40,6 +40,7 @@ public class PaymentServiceImpl implements PaymentService {
     private final SePayWebhookVerifier verifier;
     private final JdbcTemplate jdbc;
     private final BookingPaymentService bookingPayments;
+    private final MentoringPlanPaymentService planPayments;
     private final ObjectMapper json = new ObjectMapper();
 
     @Override @Transactional
@@ -115,6 +116,38 @@ public class PaymentServiceImpl implements PaymentService {
                 .ifPresent(order -> order.setStatus(PaymentOrderStatus.CANCELLED));
     }
 
+    // ===== Dev 5: đơn MENTOR_PLAN thanh toán cả gói kèm 1-1 =====
+
+    @Override @Transactional
+    public PaymentOrderResponse createMentorPlanOrder(UUID studentId, UUID planId, BigDecimal amount, String title) {
+        checkConfiguration();
+        if (amount == null || amount.signum() <= 0 || amount.stripTrailingZeros().scale() > 0) {
+            throw new AppException(ErrorCode.SESSION_PRICE_INVALID);
+        }
+        // Bấm thanh toán nhiều lần: khóa theo gói, đơn cũ còn hạn thì dùng lại
+        jdbc.queryForList("select pg_advisory_xact_lock(hashtextextended(?, 0))", "plan:" + planId);
+        expireDueOrders();
+        var existing = orders.findFirstByPlanIdAndStatus(planId, PaymentOrderStatus.PENDING);
+        if (existing.isPresent()) return response(existing.get());
+        Long sequence = jdbc.queryForObject("select nextval('payment_order_code_seq')", Long.class);
+        Instant now = Instant.now();
+        var order = PaymentOrder.builder().orderId(UUID.randomUUID()).orderCode(config.getPaymentPrefix() + sequence)
+                .orderType(PaymentOrderType.MENTOR_PLAN).planId(planId)
+                .studentId(studentId).courseTitle(title).amount(amount)
+                .bankCode(config.getBankCode()).accountNumber(config.getAccountNumber()).accountName(config.getAccountName())
+                .status(PaymentOrderStatus.PENDING).createdAt(now)
+                .expiresAt(now.plusSeconds(config.getOrderExpiryMinutes() * 60L)).build();
+        return response(orders.save(order));
+    }
+
+    @Override @Transactional
+    public void cancelPendingPlanOrder(UUID planId) {
+        orders.findFirstByPlanIdAndStatus(planId, PaymentOrderStatus.PENDING)
+                .flatMap(found -> orders.lockByCode(found.getOrderCode()))
+                .filter(order -> order.getStatus() == PaymentOrderStatus.PENDING)
+                .ifPresent(order -> order.setStatus(PaymentOrderStatus.CANCELLED));
+    }
+
     @Override @Transactional(readOnly = true)
     public PageResponse<PaymentTransaction> myPayments(Pageable pageable) {
         return page(transactions.findByStudentId(currentUserId(), pageable));
@@ -178,6 +211,7 @@ public class PaymentServiceImpl implements PaymentService {
             outcome(eventId, "AMOUNT_OR_ORDER_STATE_REVIEW_REQUIRED"); return;
         }
         if (order.getOrderType() == PaymentOrderType.MENTOR_SESSION) { settleMentorSession(order, event, eventId); return; }
+        if (order.getOrderType() == PaymentOrderType.MENTOR_PLAN) { settleMentorPlan(order, event, eventId); return; }
         // Record and grant entitlement atomically. A retry rolls everything back on any DB failure.
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         var transaction = PaymentTransaction.builder().transactionId(UUID.randomUUID())
@@ -189,17 +223,7 @@ public class PaymentServiceImpl implements PaymentService {
         transaction.setTransactionStatus(PaymentTransaction.Status.success);
         transaction.setPaymentDate(now);
         transactions.saveAndFlush(transaction);
-        // Registration creates USER accounts; their first settled purchase creates the student profile.
-        jdbc.update("""
-                update users u set role_id=r.role_id, last_updated=current_timestamp from roles r
-                where u.user_id=? and r.role_name='STUDENT'
-                and u.role_id=(select role_id from roles where role_name='USER')
-                """, order.getStudentId());
-        jdbc.update("""
-                insert into student_profiles(user_id)
-                select u.user_id from users u join roles r on r.role_id=u.role_id
-                where u.user_id=? and r.role_name='STUDENT' on conflict(user_id) do nothing
-                """, order.getStudentId());
+        upgradeToStudent(order.getStudentId());
         jdbc.update("""
                 insert into enrollments(enrollment_id,student_id,course_id,payment_transaction_id,enrolled_date,status)
                 values (?,?,?,?,?,'active') on conflict (student_id,course_id) where status = 'active' do nothing
@@ -230,6 +254,45 @@ public class PaymentServiceImpl implements PaymentService {
         order.setStatus(PaymentOrderStatus.PAID);
         order.setPaidAt(Instant.now());
         outcome(eventId, "PAID");
+    }
+
+    // Dev 5: gói active + mọi buổi confirmed, ghi giao dịch mentor_session (gắn buổi đầu tiên) trong cùng transaction
+    private void settleMentorPlan(PaymentOrder order, JsonNode event, long eventId) {
+        UUID firstScheduleId = planPayments.confirmPaidPlan(order.getPlanId());
+        if (firstScheduleId == null) {
+            // Gói đã bị hủy trước khi tiền về: giữ tiền chờ đối soát
+            order.setStatus(PaymentOrderStatus.REVIEW_REQUIRED);
+            outcome(eventId, "PLAN_NOT_PENDING_REVIEW_REQUIRED"); return;
+        }
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        var transaction = PaymentTransaction.builder().transactionId(UUID.randomUUID())
+                .orderId(order.getOrderId()).studentId(order.getStudentId()).mentorScheduleId(firstScheduleId)
+                .amount(order.getAmount()).paymentMethod("SEPAY").transactionType(PaymentTransaction.Type.mentor_session)
+                .transactionStatus(PaymentTransaction.Status.pending).sepayTransactionId(eventId)
+                .providerReference(event.path("referenceCode").asText("")).createdAt(now).lastUpdated(now).build();
+        transactions.saveAndFlush(transaction);
+        transaction.setTransactionStatus(PaymentTransaction.Status.success);
+        transaction.setPaymentDate(now);
+        transactions.saveAndFlush(transaction);
+        // Learner (USER) mua gói kèm 1-1 cũng thành học viên (STUDENT) để xem lịch Mentor 1-1
+        upgradeToStudent(order.getStudentId());
+        order.setStatus(PaymentOrderStatus.PAID);
+        order.setPaidAt(Instant.now());
+        outcome(eventId, "PAID");
+    }
+
+    // Registration creates USER accounts; their first settled purchase creates the student profile.
+    private void upgradeToStudent(UUID studentId) {
+        jdbc.update("""
+                update users u set role_id=r.role_id, last_updated=current_timestamp from roles r
+                where u.user_id=? and r.role_name='STUDENT'
+                and u.role_id=(select role_id from roles where role_name='USER')
+                """, studentId);
+        jdbc.update("""
+                insert into student_profiles(user_id)
+                select u.user_id from users u join roles r on r.role_id=u.role_id
+                where u.user_id=? and r.role_name='STUDENT' on conflict(user_id) do nothing
+                """, studentId);
     }
 
     @Scheduled(fixedDelay = 60000) @Transactional

@@ -27,6 +27,7 @@ public class CourseResponse {
     String level;
     BigDecimal price;
     BigDecimal targetScore;
+    BigDecimal entryScore;
     String thumbnailUrl;
     String status;
 

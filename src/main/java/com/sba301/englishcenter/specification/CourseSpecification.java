@@ -79,6 +79,29 @@ public class CourseSpecification {
     }
 
     /**
+     * Dev 5: khóa liên quan tới nguyện vọng của người học.
+     * - goalTargetScore: điểm đầu vào của khóa phải nhỏ hơn điểm mục tiêu (khóa quá cao so với mục tiêu thì ẩn);
+     * - currentScore: điểm mục tiêu của khóa phải lớn hơn điểm hiện tại (khóa đã vượt qua thì ẩn).
+     * Khóa chưa nhập entry_score / target_score không bị loại. Tham số null thì bỏ qua điều kiện đó.
+     */
+    public static Specification<Course> relevantToGoal(BigDecimal goalTargetScore, BigDecimal currentScore) {
+        return (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (goalTargetScore != null) {
+                predicates.add(criteriaBuilder.or(
+                        criteriaBuilder.isNull(root.get("entryScore")),
+                        criteriaBuilder.lessThan(root.get("entryScore"), goalTargetScore)));
+            }
+            if (currentScore != null) {
+                predicates.add(criteriaBuilder.or(
+                        criteriaBuilder.isNull(root.get("targetScore")),
+                        criteriaBuilder.greaterThan(root.get("targetScore"), currentScore)));
+            }
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
      * Parse chuỗi trạng thái từ query param sang enum, hỗ trợ cả 'active' và 'ACTIVE'.
      * Trả về null nếu không hợp lệ (bỏ qua filter thay vì ném lỗi).
      */

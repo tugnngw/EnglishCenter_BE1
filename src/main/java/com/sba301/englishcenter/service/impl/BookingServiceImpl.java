@@ -2,23 +2,21 @@ package com.sba301.englishcenter.service.impl;
 
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.BookingStatus;
+import com.sba301.englishcenter.common.enums.MentoringPlanStatus;
 import com.sba301.englishcenter.common.enums.PaymentOrderStatus;
 import com.sba301.englishcenter.common.enums.ScheduleStatus;
-import com.sba301.englishcenter.dto.request.BookScheduleRequest;
 import com.sba301.englishcenter.dto.request.CancelBookingRequest;
-import com.sba301.englishcenter.dto.request.RescheduleBookingRequest;
 import com.sba301.englishcenter.dto.request.UpdateBookingStatusRequest;
 import com.sba301.englishcenter.dto.response.BookingResponse;
-import com.sba301.englishcenter.dto.response.PaymentOrderResponse;
 import com.sba301.englishcenter.entity.Booking;
 import com.sba301.englishcenter.entity.MentorSchedule;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.repository.BookingRepository;
 import com.sba301.englishcenter.repository.MentorScheduleRepository;
+import com.sba301.englishcenter.repository.MentoringPlanRepository;
 import com.sba301.englishcenter.repository.PaymentOrderRepository;
 import com.sba301.englishcenter.service.BookingService;
-import com.sba301.englishcenter.service.MentorService;
 import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.service.PaymentService;
 import com.sba301.englishcenter.service.UserService;
@@ -35,7 +33,6 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -48,21 +45,20 @@ import java.util.UUID;
 @Slf4j
 public class BookingServiceImpl implements BookingService {
 
-    // Booking còn hiệu lực: được hủy / đổi lịch, dùng để kiểm tra trùng giờ
+    // Booking còn hiệu lực: được hủy, chưa có kết quả
     private static final List<BookingStatus> ACTIVE_STATUSES = List.of(BookingStatus.pending, BookingStatus.confirmed);
-    // Lý do ghi vào booking cũ khi học viên đổi lịch
-    private static final String RESCHEDULE_REASON = "Đổi lịch";
     private static final String SORT_FIELD = "schedule.startTime";
 
     private final BookingRepository bookingRepository;
     private final MentorScheduleRepository mentorScheduleRepository;
-    // Hồ sơ mentor / người dùng thuộc domain Dev 1 -> chỉ gọi qua service interface
-    private final MentorService mentorService;
+    // Người dùng thuộc domain Dev 1 -> chỉ gọi qua service interface
     private final UserService userService;
     private final NotificationService notificationService;
     // Thanh toán SePay của Dev 4: tạo / hủy đơn MENTOR_SESSION cho booking
     private final PaymentService paymentService;
     private final PaymentOrderRepository paymentOrderRepository;
+    // Gói kèm 1-1 (V21): đánh dấu hoàn thành khi học xong mọi buổi
+    private final MentoringPlanRepository mentoringPlanRepository;
 
     // Phải hủy / đổi lịch trước giờ học ít nhất bao nhiêu giờ (application.properties)
     @Value("${app.booking.cancel-deadline-hours:24}")
@@ -71,50 +67,6 @@ public class BookingServiceImpl implements BookingService {
     // Nhắc trước giờ học bao nhiêu phút (USER_FLOWS 1.6: 30 phút)
     @Value("${app.booking.reminder-minutes-before:30}")
     private long reminderMinutesBefore;
-
-    @Override
-    @Transactional
-    public BookingResponse book(UUID studentId, BookScheduleRequest request) {
-        // 1. Khóa dòng slot, slot phải còn trống và chưa tới giờ (TASK D5-07)
-        MentorSchedule schedule = lockAvailableSlot(request.getScheduleId());
-
-        // 2. Mentor của slot phải còn hoạt động (chưa bị Admin thu hồi/khóa)
-        mentorService.getMentorById(schedule.getMentorId());
-
-        // 3. Học viên không được có 2 buổi trùng giờ nhau (TASK D5-08)
-        boolean studentBusy = bookingRepository
-                .existsByStudentIdAndStatusInAndSchedule_StartTimeLessThanAndSchedule_EndTimeGreaterThan(
-                        studentId, ACTIVE_STATUSES, schedule.getEndTime(), schedule.getStartTime());
-        if (studentBusy) {
-            throw new AppException(ErrorCode.SCHEDULE_TIME_CONFLICT);
-        }
-
-        // 4. Giá slot phải là số nguyên VND > 0 để thanh toán qua SePay
-        BigDecimal price = schedule.getPrice();
-        if (price == null || price.signum() <= 0 || price.stripTrailingZeros().scale() > 0) {
-            throw new AppException(ErrorCode.SESSION_PRICE_INVALID);
-        }
-
-        // 5. Tạo booking "pending" và giữ slot ("booked") trong thời gian chờ thanh toán
-        Booking booking = bookingRepository.save(Booking.builder()
-                .schedule(schedule)
-                .mentorId(schedule.getMentorId())
-                .studentId(studentId)
-                .status(BookingStatus.pending)
-                .build());
-        schedule.setStatus(ScheduleStatus.booked);
-        mentorScheduleRepository.save(schedule);
-
-        // 6. Tạo đơn SePay (Dev 4). Thanh toán xong webhook chuyển booking sang "confirmed" và gửi thông báo;
-        //    đơn hết hạn / bị hủy thì booking bị hủy và slot mở lại (BookingPaymentServiceImpl)
-        Map<UUID, String> names = new HashMap<>();
-        PaymentOrderResponse order = paymentService.createMentorSessionOrder(studentId, booking.getBookingId(), price,
-                "Buổi kèm 1-1 với mentor " + getFullName(booking.getMentorId(), names));
-        log.info("Student {} booked schedule {} -> booking {} waiting for payment {}",
-                studentId, schedule.getScheduleId(), booking.getBookingId(), order.orderCode());
-
-        return toResponse(booking, names, order.orderCode());
-    }
 
     @Override
     @Transactional(readOnly = true)
@@ -137,6 +89,10 @@ public class BookingServiceImpl implements BookingService {
 
         // Chỉ hủy được booking còn hiệu lực và còn trong thời hạn (TASK D5-09)
         validateActive(booking);
+        // Buổi của gói chưa thanh toán: phải từ chối / hủy cả gói, không hủy lẻ từng buổi
+        if (booking.getStatus() == BookingStatus.pending && booking.getSchedule().getPlanId() != null) {
+            throw new AppException(ErrorCode.BOOKING_IN_PENDING_PLAN);
+        }
         validateCancelDeadline(booking);
 
         return cancelAndNotify(booking, requesterId, getReason(request));
@@ -149,69 +105,6 @@ public class BookingServiceImpl implements BookingService {
         // Admin xử lý booking bất thường: không áp dụng thời hạn hủy
         validateActive(booking);
         return cancelAndNotify(booking, adminId, getReason(request));
-    }
-
-    @Override
-    @Transactional
-    public BookingResponse reschedule(UUID studentId, UUID bookingId, RescheduleBookingRequest request) {
-        // 1. Booking cũ phải của học viên này, còn hiệu lực và còn trong thời hạn đổi
-        Booking oldBooking = findBooking(bookingId);
-        if (!oldBooking.getStudentId().equals(studentId)) {
-            throw new AppException(ErrorCode.BOOKING_NOT_FOUND);
-        }
-        validateActive(oldBooking);
-        // Chỉ đổi lịch buổi đã thanh toán; booking chờ thanh toán thì hủy rồi đặt lại
-        if (oldBooking.getStatus() != BookingStatus.confirmed) {
-            throw new AppException(ErrorCode.BOOKING_PAYMENT_PENDING);
-        }
-        validateCancelDeadline(oldBooking);
-
-        // 2. Khóa slot mới: còn trống, chưa tới giờ và cùng mentor
-        MentorSchedule newSchedule = lockAvailableSlot(request.getNewScheduleId());
-        if (!newSchedule.getMentorId().equals(oldBooking.getMentorId())) {
-            throw new AppException(ErrorCode.RESCHEDULE_MENTOR_MISMATCH);
-        }
-        // Giữ nguyên khoản đã thanh toán nên slot mới phải cùng giá
-        if (newSchedule.getPrice() == null
-                || newSchedule.getPrice().compareTo(oldBooking.getSchedule().getPrice()) != 0) {
-            throw new AppException(ErrorCode.RESCHEDULE_PRICE_MISMATCH);
-        }
-        mentorService.getMentorById(newSchedule.getMentorId());
-
-        // 3. Slot mới không trùng giờ với booking khác của học viên (bỏ qua booking đang đổi)
-        boolean studentBusy = bookingRepository
-                .existsByStudentIdAndBookingIdNotAndStatusInAndSchedule_StartTimeLessThanAndSchedule_EndTimeGreaterThan(
-                        studentId, bookingId, ACTIVE_STATUSES, newSchedule.getEndTime(), newSchedule.getStartTime());
-        if (studentBusy) {
-            throw new AppException(ErrorCode.SCHEDULE_TIME_CONFLICT);
-        }
-
-        // 4. Hủy booking cũ, mở lại slot cũ
-        MentorSchedule oldSchedule = lockSlot(oldBooking.getSchedule().getScheduleId());
-        markCancelled(oldBooking, studentId, RESCHEDULE_REASON);
-        oldSchedule.setStatus(ScheduleStatus.available);
-        bookingRepository.save(oldBooking);
-        mentorScheduleRepository.save(oldSchedule);
-
-        // 5. Đặt slot mới, ghi lại booking cũ để truy vết
-        Booking newBooking = bookingRepository.save(Booking.builder()
-                .schedule(newSchedule)
-                .mentorId(newSchedule.getMentorId())
-                .studentId(studentId)
-                .status(BookingStatus.confirmed)
-                .rescheduledFromId(oldBooking.getBookingId())
-                .build());
-        newSchedule.setStatus(ScheduleStatus.booked);
-        mentorScheduleRepository.save(newSchedule);
-        log.info("Student {} rescheduled booking {} -> {}", studentId, bookingId, newBooking.getBookingId());
-
-        // 6. Thông báo cho học viên và mentor (TASK D5-16)
-        Map<UUID, String> names = new HashMap<>();
-        String message = "Học viên " + getFullName(studentId, names) + " đã đổi buổi kèm 1-1 với mentor "
-                + getFullName(newBooking.getMentorId(), names) + " sang khung giờ khác.";
-        notifyBoth(newBooking, "Lịch hẹn đã được đổi", message);
-
-        return toResponse(newBooking, names);
     }
 
     @Override
@@ -243,6 +136,7 @@ public class BookingServiceImpl implements BookingService {
         bookingRepository.save(booking);
         mentorScheduleRepository.save(schedule);
         log.info("Mentor {} set booking {} -> {}", mentorId, bookingId, request.getStatus());
+        refreshPlanCompletion(schedule.getPlanId());
 
         return toResponse(booking, new HashMap<>());
     }
@@ -306,16 +200,6 @@ public class BookingServiceImpl implements BookingService {
                 .orElseThrow(() -> new AppException(ErrorCode.SCHEDULE_NOT_FOUND));
     }
 
-    // Khóa dòng slot rồi kiểm tra còn trống và chưa tới giờ, tránh 2 học viên đặt cùng 1 slot cùng lúc
-    private MentorSchedule lockAvailableSlot(UUID scheduleId) {
-        MentorSchedule schedule = lockSlot(scheduleId);
-        if (schedule.getStatus() != ScheduleStatus.available
-                || !schedule.getStartTime().isAfter(UtcTimeUtil.nowUtc())) {
-            throw new AppException(ErrorCode.SCHEDULE_NOT_AVAILABLE);
-        }
-        return schedule;
-    }
-
     private boolean isParticipant(Booking booking, UUID userId) {
         return booking.getStudentId().equals(userId) || booking.getMentorId().equals(userId);
     }
@@ -354,10 +238,12 @@ public class BookingServiceImpl implements BookingService {
         }
         MentorSchedule schedule = lockSlot(booking.getSchedule().getScheduleId());
         markCancelled(booking, cancelledBy, reason);
-        schedule.setStatus(ScheduleStatus.available);
+        // Buổi trong gói là của riêng học viên -> đóng hẳn, không mở lại cho người khác
+        schedule.setStatus(schedule.getPlanId() != null ? ScheduleStatus.cancelled : ScheduleStatus.available);
         bookingRepository.save(booking);
         mentorScheduleRepository.save(schedule);
         log.info("User {} cancelled booking {}", cancelledBy, booking.getBookingId());
+        refreshPlanCompletion(schedule.getPlanId());
 
         Map<UUID, String> names = new HashMap<>();
         String message = "Buổi kèm 1-1 giữa học viên " + getFullName(booking.getStudentId(), names)
@@ -368,6 +254,21 @@ public class BookingServiceImpl implements BookingService {
         notifyBoth(booking, "Lịch hẹn đã bị hủy", message);
 
         return toResponse(booking, names);
+    }
+
+    // Gói đã thanh toán mà không còn buổi nào chờ học (pending / confirmed) -> gói hoàn thành
+    private void refreshPlanCompletion(UUID planId) {
+        if (planId == null) {
+            return;
+        }
+        mentoringPlanRepository.findWithLockByPlanId(planId)
+                .filter(plan -> plan.getStatus() == MentoringPlanStatus.active)
+                .filter(plan -> !bookingRepository.existsBySchedule_PlanIdAndStatusIn(planId, ACTIVE_STATUSES))
+                .ifPresent(plan -> {
+                    plan.setStatus(MentoringPlanStatus.completed);
+                    mentoringPlanRepository.save(plan);
+                    log.info("Mentoring plan {} completed", planId);
+                });
     }
 
     private void notifyBoth(Booking booking, String title, String message) {
@@ -411,6 +312,7 @@ public class BookingServiceImpl implements BookingService {
         return BookingResponse.builder()
                 .bookingId(booking.getBookingId())
                 .scheduleId(schedule.getScheduleId())
+                .planId(schedule.getPlanId())
                 .mentorId(booking.getMentorId())
                 .mentorName(getFullName(booking.getMentorId(), names))
                 .studentId(booking.getStudentId())

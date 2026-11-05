@@ -84,6 +84,10 @@ public class Course extends BaseEntity {
     @Column(name = "target_score", precision = 6, scale = 2)
     private BigDecimal targetScore;
 
+    // Điểm đầu vào của khóa (VD khóa 4.0 - 5.0 thì entry 4.0) - dùng gợi ý khóa vừa sức (V21)
+    @Column(name = "entry_score", precision = 6, scale = 2)
+    private BigDecimal entryScore;
+
     /**
      * Cột `status` là PostgreSQL native enum (`course_status_enum`), KHÔNG phải
      * VARCHAR. Nếu dùng `@Convert`/`AttributeConverter`, Hibernate sẽ bind giá

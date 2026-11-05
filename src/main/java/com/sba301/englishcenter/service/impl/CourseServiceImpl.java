@@ -112,6 +112,28 @@ public class CourseServiceImpl implements CourseService {
 
     @Override
     @Transactional(readOnly = true)
+    public PageResponse<CourseResponse> getCoursesForLearner(Pageable pageable, String keyword, UUID certificatePartId,
+                                                             String level, UUID goalCertificateId,
+                                                             BigDecimal goalTargetScore, BigDecimal currentScore) {
+        Specification<Course> spec = CourseSpecification.filterCourses(
+                keyword, goalCertificateId, certificatePartId, level, null, CourseStatus.ACTIVE.getValue())
+                .and(CourseSpecification.relevantToGoal(goalTargetScore, currentScore));
+
+        Page<Course> coursePage = courseRepository.findAll(spec, pageable);
+
+        return PageResponse.<CourseResponse>builder()
+                .currentPage(coursePage.getNumber())
+                .pageSize(coursePage.getSize())
+                .totalPages(coursePage.getTotalPages())
+                .totalElements(coursePage.getTotalElements())
+                .data(coursePage.getContent().stream()
+                        .map(this::toCourseResponse)
+                        .toList())
+                .build();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public CourseResponse getCourseById(UUID courseId) {
         Course course = courseRepository.findById(courseId)
                 .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
@@ -136,6 +158,7 @@ public class CourseServiceImpl implements CourseService {
         Certificate certificate = resolveCertificate(request.getCertificateId());
         CertificatePart certificatePart = resolveCertificatePart(request.getCertificatePartId());
         User mentor = resolveMentor(request.getMentorId());
+        validateScoreRange(request.getEntryScore(), request.getTargetScore());
 
         Course course = Course.builder()
                 .code(request.getCode())
@@ -144,6 +167,7 @@ public class CourseServiceImpl implements CourseService {
                 .level(request.getLevel())
                 .price(request.getPrice())
                 .targetScore(request.getTargetScore())
+                .entryScore(request.getEntryScore())
                 .thumbnailUrl(request.getThumbnailUrl())
                 .status(CourseStatus.DRAFT)
                 .createdByUser(creator)
@@ -192,6 +216,10 @@ public class CourseServiceImpl implements CourseService {
         if (request.getTargetScore() != null) {
             course.setTargetScore(request.getTargetScore());
         }
+        if (request.getEntryScore() != null) {
+            course.setEntryScore(request.getEntryScore());
+        }
+        validateScoreRange(course.getEntryScore(), course.getTargetScore());
         if (request.getThumbnailUrl() != null) {
             course.setThumbnailUrl(request.getThumbnailUrl());
         }
@@ -630,6 +658,13 @@ public class CourseServiceImpl implements CourseService {
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
     }
 
+    // Điểm đầu vào phải nhỏ hơn điểm mục tiêu (VD khóa 4.0 -> 5.0)
+    private void validateScoreRange(BigDecimal entryScore, BigDecimal targetScore) {
+        if (entryScore != null && targetScore != null && entryScore.compareTo(targetScore) >= 0) {
+            throw new AppException(ErrorCode.COURSE_SCORE_RANGE_INVALID);
+        }
+    }
+
     private CourseResponse toCourseResponse(Course course) {
         Certificate certificate = course.getCertificate();
         CertificatePart certificatePart = course.getCertificatePart();
@@ -644,6 +679,7 @@ public class CourseServiceImpl implements CourseService {
                 .level(course.getLevel())
                 .price(course.getPrice())
                 .targetScore(course.getTargetScore())
+                .entryScore(course.getEntryScore())
                 .thumbnailUrl(course.getThumbnailUrl())
                 .status(course.getStatus() != null ? course.getStatus().getValue() : null)
                 .certificateId(certificate != null ? certificate.getCertificateId() : null)

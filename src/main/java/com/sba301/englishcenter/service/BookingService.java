@@ -2,22 +2,18 @@ package com.sba301.englishcenter.service;
 
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.BookingStatus;
-import com.sba301.englishcenter.dto.request.BookScheduleRequest;
 import com.sba301.englishcenter.dto.request.CancelBookingRequest;
-import com.sba301.englishcenter.dto.request.RescheduleBookingRequest;
 import com.sba301.englishcenter.dto.request.UpdateBookingStatusRequest;
 import com.sba301.englishcenter.dto.response.BookingResponse;
 import org.springframework.data.domain.Pageable;
 
 import java.util.UUID;
 
+/**
+ * Lịch hẹn 1-1. Không còn đặt slot công khai / đổi lịch: buổi học được tạo trong gói kèm 1-1
+ * ({@link MentoringPlanService}) sau khi mentor tư vấn, học viên thanh toán cả gói.
+ */
 public interface BookingService {
-
-    /**
-     * Học viên đặt 1 slot còn trống: booking "pending", giữ slot và tạo đơn SePay (TASK D5-06, D5-07, D5-08).
-     * Webhook thanh toán thành công mới chuyển booking sang "confirmed".
-     */
-    BookingResponse book(UUID studentId, BookScheduleRequest request);
 
     /**
      * Xem chi tiết 1 booking: chỉ học viên / mentor của booking hoặc admin.
@@ -28,11 +24,6 @@ public interface BookingService {
      * Học viên hoặc mentor của booking hủy lịch, phải trước giờ học theo thời hạn cấu hình (TASK D5-09).
      */
     BookingResponse cancel(UUID requesterId, UUID bookingId, CancelBookingRequest request);
-
-    /**
-     * Học viên đổi sang slot khác của cùng mentor: hủy booking cũ + đặt slot mới trong 1 transaction (TASK D5-10).
-     */
-    BookingResponse reschedule(UUID studentId, UUID bookingId, RescheduleBookingRequest request);
 
     /**
      * Mentor cập nhật kết quả buổi học: completed hoặc no_show (TASK D5-11).

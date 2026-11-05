@@ -26,6 +26,15 @@ public interface CourseService {
                                             UUID certificatePartId, String level,
                                             BigDecimal targetScore, String status);
 
+    /**
+     * Dev 5: danh sách khóa cho Learner / Student - chỉ khóa đang mở bán, đúng chứng chỉ mục tiêu và liên quan tới
+     * nguyện vọng: điểm đầu vào &lt; điểm mục tiêu, điểm mục tiêu của khóa &gt; điểm hiện tại (khóa đã vượt qua thì ẩn).
+     * Tham số null thì bỏ qua điều kiện đó.
+     */
+    PageResponse<CourseResponse> getCoursesForLearner(Pageable pageable, String keyword, UUID certificatePartId,
+                                                      String level, UUID goalCertificateId,
+                                                      BigDecimal goalTargetScore, BigDecimal currentScore);
+
     CourseResponse getCourseById(UUID courseId);
 
     CourseResponse createCourse(CreateCourseRequest request);

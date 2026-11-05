@@ -6,6 +6,7 @@ import com.sba301.englishcenter.dto.response.CourseContentResponse;
 import com.sba301.englishcenter.dto.response.CourseResponse;
 import com.sba301.englishcenter.dto.response.CourseVocabularySetResponse;
 import com.sba301.englishcenter.service.CourseService;
+import com.sba301.englishcenter.service.LearnerGoalResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -29,6 +31,7 @@ import java.util.UUID;
 public class CourseController {
 
     private final CourseService courseService;
+    private final LearnerGoalResolver learnerGoalResolver;
 
     // ============================================
     // CATALOG & DETAIL
@@ -45,6 +48,13 @@ public class CourseController {
             @RequestParam(required = false) BigDecimal targetScore,
             @RequestParam(required = false) String status,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        // Learner / Student chỉ thấy khóa đang bán, đúng chứng chỉ mục tiêu và liên quan nguyện vọng (Dev 5)
+        Optional<LearnerGoalResolver.LearnerGoal> goal = learnerGoalResolver.currentLearnerGoal();
+        if (goal.isPresent()) {
+            LearnerGoalResolver.LearnerGoal g = goal.get();
+            return courseService.getCoursesForLearner(pageable, keyword, certificatePartId, level,
+                    g.certificateId() != null ? g.certificateId() : certificateId, g.targetScore(), g.currentScore());
+        }
         return courseService.getCourses(pageable, keyword, certificateId, certificatePartId,
                 level, targetScore, status);
     }
