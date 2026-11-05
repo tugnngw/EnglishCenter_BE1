@@ -338,15 +338,24 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private UserResponse toUserResponse(User user) {
-        return UserResponse.builder()
+        UserResponse.UserResponseBuilder builder = UserResponse.builder()
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .phone(user.getPhone())
                 .role(user.getRole().getRoleName())
                 .isActive(user.getIsActive())
-                .createdAt(user.getCreatedAt())
-                .build();
+                .createdAt(user.getCreatedAt());
+        // Learner: trả kèm mục tiêu học tập (giống GET /account/me) để đăng nhập lại không phải chọn lại mục tiêu
+        String role = user.getRole().getRoleName();
+        if ("STUDENT".equals(role) || "USER".equals(role)) {
+            studentProfileRepository.findById(user.getUserId()).ifPresent(p -> builder
+                    .targetCertificateId(p.getTargetCertificateId())
+                    .targetScore(p.getTargetScore())
+                    .currentLevel(p.getCurrentLevel())
+                    .currentScore(p.getCurrentScore()));
+        }
+        return builder.build();
     }
 
     /**
