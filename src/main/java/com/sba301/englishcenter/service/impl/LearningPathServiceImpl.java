@@ -2,6 +2,7 @@ package com.sba301.englishcenter.service.impl;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.sba301.englishcenter.common.PageResponse;
+import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.LearningPathItemType;
 import com.sba301.englishcenter.common.enums.LearningPathStatus;
 import com.sba301.englishcenter.dto.learningpath.LearningPathItemData;
@@ -11,9 +12,11 @@ import com.sba301.englishcenter.dto.request.LearningPathRequest;
 import com.sba301.englishcenter.dto.response.LearningPathItemResponse;
 import com.sba301.englishcenter.dto.response.LearningPathProgressResponse;
 import com.sba301.englishcenter.dto.response.LearningPathResponse;
+import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.LearningPath;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
+import com.sba301.englishcenter.repository.ExamRepository;
 import com.sba301.englishcenter.repository.LearningPathRepository;
 import com.sba301.englishcenter.service.CertificateService;
 import com.sba301.englishcenter.service.CourseService;
@@ -40,6 +43,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
@@ -61,6 +65,7 @@ public class LearningPathServiceImpl implements LearningPathService {
     private final PracticeExamService practiceExamService;
     private final EnrollmentService enrollmentService;
     private final ExamAttemptService examAttemptService;
+    private final ExamRepository examRepository;
 
     // ===================== public =====================
 
@@ -216,7 +221,9 @@ public class LearningPathServiceImpl implements LearningPathService {
             // Quyết định nhóm: chặng khóa học hoàn thành khi đã ghi danh khóa (đã thanh toán)
             case COURSE -> enrollmentService.isEnrolled(studentId, item.refId());
             case EXAM -> examAttemptService.hasPassedExam(studentId, item.refId());
-            case PRACTICE_EXAM -> practiceExamService.hasReachedBand(studentId, item.refId(), item.targetBand());
+            // Đề luyện tập AI nay thuộc module Exam (examScope = practice); vẫn tính cho refId đề cũ (bảng practice_exams)
+            case PRACTICE_EXAM -> examAttemptService.hasReachedPracticeBand(studentId, item.refId(), item.targetBand())
+                    || practiceExamService.hasReachedBand(studentId, item.refId(), item.targetBand());
         };
     }
 
@@ -248,8 +255,25 @@ public class LearningPathServiceImpl implements LearningPathService {
         return switch (type) {
             case COURSE -> courseService.getCourseById(refId).getTitle();
             case EXAM -> examService.getExamDetail(refId).getExam().getExamTitle();
-            case PRACTICE_EXAM -> practiceExamService.getTitle(refId);
+            case PRACTICE_EXAM -> resolvePracticeTitle(refId);
         };
+    }
+
+    /**
+     * Chặng PRACTICE_EXAM: đề luyện tập AI tạo ở trang AI Practice nằm trong bảng exams (examScope = practice).
+     * Lộ trình tạo trước đó có thể còn refId của bảng practice_exams cũ -> không tìm thấy trong exams thì đọc bảng cũ.
+     */
+    private String resolvePracticeTitle(UUID refId) {
+        // Tra thẳng repository (không gọi service @Transactional rồi bắt lỗi -> tránh transaction bị đánh dấu rollback)
+        Optional<Exam> exam = examRepository.findById(refId);
+        if (exam.isEmpty()) {
+            return practiceExamService.getTitle(refId);
+        }
+        if (exam.get().getExamScope() != ExamScope.PRACTICE) {
+            // Chọn nhầm đề thi thường cho chặng luyện đề AI
+            throw new AppException(ErrorCode.LEARNING_PATH_ITEM_INVALID);
+        }
+        return exam.get().getExamTitle();
     }
 
     private LearningPath findPath(UUID learningPathId) {

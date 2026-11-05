@@ -44,6 +44,10 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, UUID> 
     // Dev 5 (Learning Path): học viên đã có lượt thi đạt của đề này chưa
     boolean existsByExam_ExamIdAndStudent_UserIdAndPassedTrue(UUID examId, UUID studentId);
 
+    // Dev 5 (Learning Path): các lượt đã nộp của học viên cho 1 đề luyện tập AI (chặng PRACTICE_EXAM)
+    List<ExamAttempt> findByExam_ExamIdAndStudent_UserIdAndStatusIn(UUID examId, UUID studentId,
+                                                                     Collection<AttemptStatus> statuses);
+
     @Query("select coalesce(max(a.attemptNumber), 0) from ExamAttempt a "
             + "where a.exam.examId = :examId and a.student.userId = :studentId")
     int findMaxAttemptNumber(@Param("examId") UUID examId, @Param("studentId") UUID studentId);

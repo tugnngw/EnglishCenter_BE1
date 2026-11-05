@@ -319,6 +319,30 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     }
 
     @Override
+    @Transactional(readOnly = true)
+    public boolean hasReachedPracticeBand(UUID studentId, UUID examId, BigDecimal targetBand) {
+        List<ExamAttempt> attempts = attemptRepository
+                .findByExam_ExamIdAndStudent_UserIdAndStatusIn(examId, studentId, FINISHED_STATUSES);
+        if (attempts.isEmpty()) {
+            return false;
+        }
+        List<ExamQuestion> examQuestions = examQuestionRepository.findDetailedByExamId(examId);
+        for (ExamAttempt attempt : attempts) {
+            PracticeLevelResponse level = practiceLevelCalculator.calculate(studentId, examQuestions,
+                    answersByQuestion(attempt.getAttemptId()));
+            // null = còn câu Writing / Speaking chưa được AI chấm
+            if (level == null) {
+                continue;
+            }
+            if (targetBand == null || (level.getOverallScore() != null
+                    && level.getOverallScore().compareTo(targetBand) >= 0)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
     @Transactional
     public int autoCloseOverdueAttempts() {
         LocalDateTime now = LocalDateTime.now();

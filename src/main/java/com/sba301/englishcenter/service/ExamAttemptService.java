@@ -9,6 +9,7 @@ import com.sba301.englishcenter.dto.response.AttemptResultResponse;
 import com.sba301.englishcenter.dto.response.AttemptSummaryResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -48,6 +49,13 @@ public interface ExamAttemptService {
 
     /** Học viên đã thi đạt đề này chưa (Dev 5 dùng để tính tiến độ Learning Path). */
     boolean hasPassedExam(UUID studentId, UUID examId);
+
+    /**
+     * Đề luyện tập AI (examScope = practice): học viên đã có lượt chấm xong đạt band mục tiêu chưa
+     * (band theo thang chứng chỉ mục tiêu, giống trang kết quả). targetBand = null: chỉ cần 1 lượt chấm xong.
+     * Dev 5 dùng để tính tiến độ chặng PRACTICE_EXAM của Learning Path.
+     */
+    boolean hasReachedPracticeBand(UUID studentId, UUID examId, BigDecimal targetBand);
 
     /** Tự nộp các lượt thi đã quá hạn (job định kỳ). @return số lượt đã đóng. */
     int autoCloseOverdueAttempts();
