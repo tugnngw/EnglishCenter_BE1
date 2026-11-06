@@ -106,6 +106,12 @@ public enum ErrorCode {
     AI_IMPORT_INVALID_FILE(5025, "File không hợp lệ: chỉ nhận PDF (tối đa 15MB) hoặc nội dung văn bản", HttpStatus.BAD_REQUEST),
     AI_IMPORT_FAILED(5026, "AI không đọc được file, vui lòng thử lại", HttpStatus.BAD_GATEWAY),
     ATTEMPT_GRADING_CLAIMED(5027, "Bài này đang được mentor khác chấm", HttpStatus.CONFLICT),
+    EXAM_TYPE_SCOPE_MISMATCH(5028, "Loại đề không hợp với phạm vi đề thi", HttpStatus.BAD_REQUEST),
+    EXAM_DESCRIPTION_TOO_SHORT(5029, "Mô tả đề thi phải từ 30 ký tự: ghi rõ đề gồm những phần nào, dành cho ai, "
+            + "làm trong bao lâu", HttpStatus.BAD_REQUEST),
+    EXAM_COURSE_NOT_COMPLETED(5030, "Cần đạt đủ bài tập của khóa học trước khi thi cuối kỳ", HttpStatus.FORBIDDEN),
+    EXAM_QUIZZES_NOT_PASSED(5031, "Cần đạt hết các bài Quiz của khóa học trước khi thi giữa kỳ", HttpStatus.FORBIDDEN),
+    EXAM_MIDTERM_NOT_PASSED(5032, "Cần đạt bài thi giữa kỳ trước khi thi cuối kỳ", HttpStatus.FORBIDDEN),
     // === Dev 2.5 - Bài tập: nộp bài, chấm điểm, lưu trữ file ===
     HOMEWORK_SUBMISSION_TYPE_MISMATCH(3020,
             "Hình thức nộp không khớp với bài tập",

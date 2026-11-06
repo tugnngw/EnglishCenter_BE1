@@ -41,6 +41,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -81,9 +82,15 @@ public class ExamServiceImpl implements ExamService {
                                                                ExamScope examScope, UUID certificateId,
                                                                UUID courseId, String level,
                                                                DifficultyLevel difficulty, Boolean isFree) {
-        Page<Exam> page = examRepository.findAll(ExamSpecification.filterExams(keyword, examType,
-                ExamStatus.PUBLISHED, examScope, certificateId, courseId, level, difficulty, isFree), pageable);
-        return toPage(page, false);
+        Optional<UserPrincipal> principal = SecurityUtils.getCurrentUserPrincipal();
+        boolean admin = principal.map(p -> RoleName.ADMIN.name().equals(p.getRoleName())).orElse(false);
+        Specification<Exam> spec = ExamSpecification.filterExams(keyword, examType,
+                ExamStatus.PUBLISHED, examScope, certificateId, courseId, level, difficulty, isFree);
+        if (!admin) {
+            // Không trả hết đề đã công khai: đề khóa học chỉ hiện với học viên đã mua khóa đó
+            spec = spec.and(ExamSpecification.visibleToStudent(principal.map(UserPrincipal::getUserId).orElse(null)));
+        }
+        return toPage(examRepository.findAll(spec, pageable), false);
     }
 
     @Override
@@ -148,6 +155,7 @@ public class ExamServiceImpl implements ExamService {
                 request.getPrice(), request.getDifficultyLevel(), request.getRecommendedLevel(),
                 request.getAvailableFrom(), request.getAvailableUntil());
         validateWindow(exam);
+        validateTypeAndDescription(exam);
 
         exam = examRepository.save(exam);
         log.info("Admin {} tạo đề thi {} ({})", adminId, exam.getExamId(), exam.getExamScope());
@@ -195,6 +203,11 @@ public class ExamServiceImpl implements ExamService {
                 request.getPrice(), request.getDifficultyLevel(), request.getRecommendedLevel(),
                 request.getAvailableFrom(), request.getAvailableUntil());
         validateWindow(exam);
+        // Đề cũ chưa có mô tả vẫn sửa được trường khác; chỉ kiểm tra mô tả khi admin gửi mô tả mới
+        validateType(exam);
+        if (request.getDescription() != null) {
+            validateDescription(exam);
+        }
 
         exam = examRepository.save(exam);
         log.info("Cập nhật đề thi {}", examId);
@@ -223,6 +236,7 @@ public class ExamServiceImpl implements ExamService {
         if (examQuestions.isEmpty()) {
             throw new AppException(ErrorCode.EXAM_INVALID_FOR_PUBLISH, "Đề thi chưa có câu hỏi nào");
         }
+        validateTypeAndDescription(exam);
         for (ExamQuestion eq : examQuestions) {
             Question q = eq.getQuestion();
             try {
@@ -488,6 +502,41 @@ public class ExamServiceImpl implements ExamService {
             exam.setCourse(null);
         } else {
             throw new AppException(ErrorCode.INVALID_EXAM_SCOPE);
+        }
+    }
+
+    /** Mô tả tối thiểu của đề thi thử / đề khóa học: phải nói rõ đề gồm gì, không ghi vài ba chữ. */
+    static final int MIN_DESCRIPTION_LENGTH = 30;
+
+    private void validateTypeAndDescription(Exam exam) {
+        validateType(exam);
+        validateDescription(exam);
+    }
+
+    /**
+     * Thi thử (trial) chỉ dùng cho kiểm tra đầu vào - đề thi thử đầy đủ nằm ở Luyện tập AI (practice).
+     * Quiz / giữa kỳ / cuối kỳ là đề đầu ra của khóa học, bắt buộc thuộc một khóa (course).
+     */
+    private void validateType(Exam exam) {
+        ExamType type = exam.getExamType();
+        if (exam.getExamScope() == ExamScope.TRIAL && type != ExamType.PLACEMENT_TEST) {
+            throw new AppException(ErrorCode.EXAM_TYPE_SCOPE_MISMATCH,
+                    "Đề thi thử chứng chỉ chỉ dùng cho Kiểm tra đầu vào. Quiz / giữa kỳ / cuối kỳ phải thuộc một "
+                            + "khóa học; thi thử đầy đủ tạo ở Luyện tập AI");
+        }
+        if (exam.getExamScope() == ExamScope.COURSE && (type == null || type == ExamType.PLACEMENT_TEST)) {
+            throw new AppException(ErrorCode.EXAM_TYPE_SCOPE_MISMATCH,
+                    "Đề của khóa học phải là Quiz, Giữa kỳ hoặc Cuối kỳ");
+        }
+    }
+
+    private void validateDescription(Exam exam) {
+        if (exam.getExamScope() == ExamScope.PRACTICE) {
+            return;
+        }
+        String description = exam.getDescription() == null ? "" : exam.getDescription().trim();
+        if (description.length() < MIN_DESCRIPTION_LENGTH) {
+            throw new AppException(ErrorCode.EXAM_DESCRIPTION_TOO_SHORT);
         }
     }
 

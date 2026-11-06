@@ -64,6 +64,8 @@ class ExamFlowIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    private static final String DESCRIPTION = "Đề kiểm tra gồm Reading và Writing, làm trong 30 phút";
+
     private UsernamePasswordAuthenticationToken admin;
     private UsernamePasswordAuthenticationToken student;
 
@@ -118,14 +120,23 @@ class ExamFlowIntegrationTest {
         UUID certificateId = createCertificate();
         String code = "IT-EXAM-" + System.nanoTime();
 
-        // ---------- Admin tạo đề (examType "final" kiểm tra converter cho nhãn trùng từ khóa Java)
+        // ---------- Admin tạo đề. Thi thử chỉ cho kiểm tra đầu vào: "final" (nhãn trùng từ khóa Java, kiểm tra
+        // converter) bị chặn 5028; mô tả quá ngắn bị chặn 5029
+        assertThat((Integer) call(post("/api/v1/admin/exams"), admin, """
+                {"examScope":"trial","certificateId":"%s","examType":"final","examTitle":"Integration exam",
+                 "description":"%s","durationMinutes":30}""".formatted(certificateId, DESCRIPTION))
+                .read("$.code")).isEqualTo(5028);
+        assertThat((Integer) call(post("/api/v1/admin/exams"), admin, """
+                {"examScope":"trial","certificateId":"%s","examType":"placement_test","examTitle":"Integration exam",
+                 "description":"Đề test","durationMinutes":30}""".formatted(certificateId))
+                .read("$.code")).isEqualTo(5029);
         Response created = call(post("/api/v1/admin/exams"), admin, """
-                {"examScope":"trial","certificateId":"%s","examCode":"%s","examType":"final",
-                 "examTitle":"Integration exam","durationMinutes":30,"maxAttempts":1,"passingScore":50,
-                 "recommendedLevel":"B1"}""".formatted(certificateId, code));
+                {"examScope":"trial","certificateId":"%s","examCode":"%s","examType":"placement_test",
+                 "examTitle":"Integration exam","description":"%s","durationMinutes":30,"maxAttempts":1,
+                 "passingScore":50,"recommendedLevel":"B1"}""".formatted(certificateId, code, DESCRIPTION));
         assertThat(created.status()).as(created.body()).isEqualTo(200);
         String examId = created.read("$.result.exam.examId");
-        assertThat((String) created.read("$.result.exam.examType")).isEqualTo("final");
+        assertThat((String) created.read("$.result.exam.examType")).isEqualTo("placement_test");
 
         assertThat(call(post("/api/v1/admin/exams"), admin, """
                 {"examScope":"trial","certificateId":"%s","examCode":"%s","examTitle":"x","durationMinutes":5}
@@ -168,7 +179,8 @@ class ExamFlowIntegrationTest {
         // ---------- Publish + danh sách public (bind enum PostgreSQL)
         Response published = call(post("/api/v1/admin/exams/" + examId + "/publish"), admin, null);
         assertThat(published.status()).as(published.body()).isEqualTo(200);
-        Response list = call(get("/api/v1/exams?examType=final&level=b1&certificateId=" + certificateId), null, null);
+        Response list = call(get("/api/v1/exams?examType=placement_test&level=b1&certificateId=" + certificateId),
+                null, null);
         assertThat((List<String>) list.read("$.data[*].examId")).containsExactly(examId);
         Response outline = call(get("/api/v1/exams/" + examId), null, null);
         assertThat(outline.body()).doesNotContain("Pick A").doesNotContain("isCorrect");
@@ -247,7 +259,8 @@ class ExamFlowIntegrationTest {
         assertThat(call(get("/api/v1/attempts/" + attemptId), auth(UUID.randomUUID(), "STUDENT"), null).status())
                 .isEqualTo(404);
 
-        // ---------- Năng lực: chỉ tính đề thi thử loại placement_test
+        // ---------- Năng lực: chỉ tính đề thi thử loại placement_test (đổi loại thẳng trong DB để thử ca đề cũ)
+        jdbc.update("UPDATE exams SET exam_type = 'final' WHERE exam_id = ?::uuid", examId);
         assertThat((List<Object>) call(get("/api/v1/me/proficiency"), student, null).read("$.result")).isEmpty();
         jdbc.update("UPDATE exams SET exam_type = 'placement_test' WHERE exam_id = ?::uuid", examId);
         Response proficiency = call(get("/api/v1/me/proficiency"), student, null);
@@ -334,7 +347,7 @@ class ExamFlowIntegrationTest {
             }
         }
         assertThat(jdbc.queryForObject("SELECT description FROM exams WHERE exam_code = 'D3-COURSE-QUIZ-01'",
-                String.class)).isEqualTo("Bài kiểm tra nhanh Unit 1");
+                String.class)).isEqualTo("Bài kiểm tra nhanh Unit 1: 2 câu ngữ pháp (to be, số nhiều bất quy tắc), làm trong 10 phút");
 
         // Thang điểm từng phần thi (properties) phải ra đúng JSON để FE quy đổi điểm theo chứng chỉ
         Response ielts = call(get("/api/v1/certificates/d3000000-0000-4000-8000-000000000001"), student, null);
@@ -355,6 +368,94 @@ class ExamFlowIntegrationTest {
         jdbc.update("INSERT INTO enrollments (student_id, course_id, status) VALUES (?, ?::uuid, 'active')",
                 studentId, "d3000000-0000-4000-8000-000000000020");
         assertThat(call(post("/api/v1/exams/" + courseExam + "/attempts"), student, null).status()).isEqualTo(200);
+    }
+
+    @Test
+    void courseExamsAreListedOnlyForBuyersAndUnlockInOrder() throws Exception {
+        setUpUsers();
+        EncodedResource script = new EncodedResource(new ClassPathResource("db/init/D3_exam_sample_data.sql"),
+                StandardCharsets.UTF_8);
+        try (Connection connection = jdbc.getDataSource().getConnection()) {
+            ScriptUtils.executeSqlScript(connection, script);
+        }
+        String courseId = "d3000000-0000-4000-8000-000000000020";
+        String courseQuiz = "d3000000-0000-4000-8000-000000000200";
+        String trialExam = "d3000000-0000-4000-8000-000000000100";
+
+        // ---------- Đề khóa học không có trong danh sách của khách / học viên chưa mua khóa
+        assertThat((List<String>) call(get("/api/v1/exams?size=100"), null, null).read("$.data[*].examId"))
+                .contains(trialExam).doesNotContain(courseQuiz);
+        assertThat((List<String>) call(get("/api/v1/exams?size=100"), student, null).read("$.data[*].examId"))
+                .doesNotContain(courseQuiz);
+        UUID studentId = ((UserPrincipal) student.getPrincipal()).getUserId();
+        jdbc.update("INSERT INTO enrollments (student_id, course_id, status) VALUES (?, ?::uuid, 'active')",
+                studentId, courseId);
+        assertThat((List<String>) call(get("/api/v1/exams?size=100"), student, null).read("$.data[*].examId"))
+                .contains(courseQuiz);
+        // Admin vẫn thấy mọi đề đã công khai
+        assertThat((List<String>) call(get("/api/v1/exams?size=100"), admin, null).read("$.data[*].examId"))
+                .contains(courseQuiz);
+
+        // ---------- Đề khóa học phải là quiz / giữa kỳ / cuối kỳ
+        assertThat((Integer) call(post("/api/v1/admin/exams"), admin, """
+                {"examScope":"course","courseId":"%s","examType":"placement_test","examTitle":"Final",
+                 "description":"%s","durationMinutes":30}""".formatted(courseId, DESCRIPTION))
+                .read("$.code")).isEqualTo(5028);
+        // DB test dùng lại giữa các lần chạy: dọn đề / bài tập do lần chạy trước thêm vào khóa mẫu
+        jdbc.update("DELETE FROM course_content WHERE course_id = ?::uuid AND content_type = 'homework'", courseId);
+        jdbc.update("DELETE FROM exams WHERE course_id = ?::uuid AND exam_id <> ?::uuid", courseId, courseQuiz);
+        String midterm = publishCourseExam(courseId, "midterm");
+        String finalExam = publishCourseExam(courseId, "final");
+        UUID homework = UUID.randomUUID();
+        jdbc.update("INSERT INTO course_content (content_id, course_id, content_type, title) "
+                + "VALUES (?, ?::uuid, 'homework', 'Unit 1 homework')", homework, courseId);
+
+        // ---------- Thi nối tiếp: Quiz -> Giữa kỳ -> Cuối kỳ
+        // Giữa kỳ: chưa đạt Quiz của khóa -> 5031
+        assertThat((Boolean) call(get("/api/v1/exams/" + midterm), student, null).read("$.result.accessible"))
+                .isFalse();
+        assertThat((Integer) call(post("/api/v1/exams/" + midterm + "/attempts"), student, null).read("$.code"))
+                .isEqualTo(5031);
+        // Quiz không có điều kiện
+        Response quizAttempt = call(post("/api/v1/exams/" + courseQuiz + "/attempts"), student, null);
+        assertThat(quizAttempt.status()).as(quizAttempt.body()).isEqualTo(200);
+        markPassed(courseQuiz, studentId);
+        // Đạt Quiz -> Giữa kỳ mở; Cuối kỳ vẫn khóa vì chưa đạt Giữa kỳ -> 5032
+        assertThat(call(post("/api/v1/exams/" + midterm + "/attempts"), student, null).status()).isEqualTo(200);
+        assertThat((Integer) call(post("/api/v1/exams/" + finalExam + "/attempts"), student, null).read("$.code"))
+                .isEqualTo(5032);
+        markPassed(midterm, studentId);
+        // Đạt Giữa kỳ nhưng bài tập chưa nộp / nộp chưa chấm -> 5030
+        assertThat((Integer) call(post("/api/v1/exams/" + finalExam + "/attempts"), student, null).read("$.code"))
+                .isEqualTo(5030);
+        jdbc.update("INSERT INTO homework_submissions (homework_content_id, student_id, answer_content) "
+                + "VALUES (?, ?, 'done')", homework, studentId);
+        assertThat((Integer) call(post("/api/v1/exams/" + finalExam + "/attempts"), student, null).read("$.code"))
+                .isEqualTo(5030);
+        // Bài tập đạt -> Cuối kỳ mở
+        jdbc.update("UPDATE homework_submissions SET passed = TRUE WHERE homework_content_id = ?", homework);
+        Response finalAttempt = call(post("/api/v1/exams/" + finalExam + "/attempts"), student, null);
+        assertThat(finalAttempt.status()).as(finalAttempt.body()).isEqualTo(200);
+    }
+
+    /** Tạo + công khai một đề khóa học 1 câu, trả examId. */
+    private String publishCourseExam(String courseId, String examType) throws Exception {
+        Response created = call(post("/api/v1/admin/exams"), admin, """
+                {"examScope":"course","courseId":"%s","examType":"%s","examTitle":"IELTS Foundation %s",
+                 "description":"%s","durationMinutes":30}""".formatted(courseId, examType, examType, DESCRIPTION));
+        assertThat(created.status()).as(created.body()).isEqualTo(200);
+        String examId = created.read("$.result.exam.examId");
+        call(post("/api/v1/admin/exams/" + examId + "/questions"), admin, """
+                {"questionType":"multiple_choice","questionText":"Pick A","points":1,
+                 "options":[{"optionText":"A","isCorrect":true},{"optionText":"B"}]}""");
+        assertThat(call(post("/api/v1/admin/exams/" + examId + "/publish"), admin, null).status()).isEqualTo(200);
+        return examId;
+    }
+
+    /** Đánh dấu lượt thi của học viên ở đề này là đã chấm và đạt. */
+    private void markPassed(String examId, UUID studentId) {
+        jdbc.update("UPDATE exam_attempts SET passed = TRUE, status = 'graded' "
+                + "WHERE exam_id = ?::uuid AND student_id = ?", examId, studentId);
     }
 
     private static List<Response> parallel(Callable<Response> task) throws Exception {
