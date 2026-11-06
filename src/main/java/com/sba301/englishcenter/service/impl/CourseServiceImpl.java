@@ -31,11 +31,15 @@ import com.sba301.englishcenter.repository.CourseContentRepository;
 import com.sba301.englishcenter.repository.CourseRepository;
 import com.sba301.englishcenter.repository.CourseVocabularySetRepository;
 import com.sba301.englishcenter.repository.ExamRepository;
+import com.sba301.englishcenter.repository.HomeworkSubmissionRepository;
 import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.repository.VocabularySetRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.service.CourseService;
+import com.sba301.englishcenter.service.HomeworkContentData;
 import com.sba301.englishcenter.specification.CourseSpecification;
+import com.sba301.englishcenter.util.CourseRules;
+import com.sba301.englishcenter.common.enums.ExamStatus;
 import com.sba301.englishcenter.util.JsonUtil;
 import com.sba301.englishcenter.util.SessionEnrollmentChecker;
 import com.sba301.englishcenter.util.SessionVariableHelper;
@@ -77,6 +81,7 @@ public class CourseServiceImpl implements CourseService {
     private final CourseVocabularySetRepository courseVocabularySetRepository;
     private final VocabularySetRepository vocabularySetRepository;
     private final ExamRepository examRepository;
+    private final HomeworkSubmissionRepository homeworkSubmissionRepository;
     private final SessionEnrollmentChecker enrollmentChecker;
 
     @Override
@@ -143,7 +148,8 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public CourseResponse createCourse(CreateCourseRequest request) {
-        if (courseRepository.existsByCode(request.getCode())) {
+        String code = request.getCode().trim().toUpperCase();
+        if (courseRepository.existsByCode(code)) {
             throw new AppException(ErrorCode.COURSE_CODE_EXISTED);
         }
 
@@ -158,13 +164,15 @@ public class CourseServiceImpl implements CourseService {
         Certificate certificate = resolveCertificate(request.getCertificateId());
         CertificatePart certificatePart = resolveCertificatePart(request.getCertificatePartId());
         User mentor = resolveMentor(request.getMentorId());
-        validateScoreRange(request.getEntryScore(), request.getTargetScore());
+        CourseRules.validatePartBelongsTo(certificate, certificatePart);
+        CourseRules.validateScores(certificate, certificatePart, request.getEntryScore(), request.getTargetScore());
+        CourseRules.validatePrice(request.getPrice());
 
         Course course = Course.builder()
-                .code(request.getCode())
-                .title(request.getTitle())
+                .code(code)
+                .title(request.getTitle().trim())
                 .description(request.getDescription())
-                .level(request.getLevel())
+                .level(CourseRules.normalizeLevel(request.getLevel()))
                 .price(request.getPrice())
                 .targetScore(request.getTargetScore())
                 .entryScore(request.getEntryScore())
@@ -202,15 +210,19 @@ public class CourseServiceImpl implements CourseService {
         sessionVariableHelper.setCurrentUserId(currentUserId);
 
         if (request.getTitle() != null && !request.getTitle().isBlank()) {
-            course.setTitle(request.getTitle());
+            course.setTitle(request.getTitle().trim());
         }
         if (request.getDescription() != null) {
             course.setDescription(request.getDescription());
         }
         if (request.getLevel() != null) {
-            course.setLevel(request.getLevel());
+            // Giữ nguyên giá trị cũ (dữ liệu trước khi chuẩn hoá CEFR), giá trị mới phải là CEFR.
+            if (!request.getLevel().equals(course.getLevel())) {
+                course.setLevel(CourseRules.normalizeLevel(request.getLevel()));
+            }
         }
         if (request.getPrice() != null) {
+            CourseRules.validatePrice(request.getPrice());
             course.setPrice(request.getPrice());
         }
         if (request.getTargetScore() != null) {
@@ -219,21 +231,35 @@ public class CourseServiceImpl implements CourseService {
         if (request.getEntryScore() != null) {
             course.setEntryScore(request.getEntryScore());
         }
-        validateScoreRange(course.getEntryScore(), course.getTargetScore());
         if (request.getThumbnailUrl() != null) {
             course.setThumbnailUrl(request.getThumbnailUrl());
         }
-        if (request.getStatus() != null && !request.getStatus().isBlank()) {
-            course.setStatus(parseStatus(request.getStatus()));
-        }
         if (request.getCertificateId() != null) {
-            course.setCertificate(resolveCertificate(request.getCertificateId()));
+            Certificate certificate = resolveCertificate(request.getCertificateId());
+            boolean changed = course.getCertificate() == null
+                    || !course.getCertificate().getCertificateId().equals(certificate.getCertificateId());
+            course.setCertificate(certificate);
+            // Đổi chứng chỉ → kỹ năng của chứng chỉ cũ không còn hợp lệ.
+            if (changed && request.getCertificatePartId() == null) {
+                course.setCertificatePart(null);
+            }
         }
         if (request.getCertificatePartId() != null) {
             course.setCertificatePart(resolveCertificatePart(request.getCertificatePartId()));
         }
+        CourseRules.validatePartBelongsTo(course.getCertificate(), course.getCertificatePart());
+        CourseRules.validateScores(course.getCertificate(), course.getCertificatePart(),
+                course.getEntryScore(), course.getTargetScore());
         if (request.getMentorId() != null) {
             course.setMentor(resolveMentor(request.getMentorId()));
+        }
+        if (request.getStatus() != null && !request.getStatus().isBlank()) {
+            CourseStatus nextStatus = parseStatus(request.getStatus());
+            if (nextStatus == CourseStatus.ACTIVE && course.getStatus() != CourseStatus.ACTIVE
+                    && (course.getPrice() == null || courseContentRepository.countByCourse_CourseId(courseId) == 0)) {
+                throw new AppException(ErrorCode.COURSE_CANNOT_ACTIVATE);
+            }
+            course.setStatus(nextStatus);
         }
 
         course.setLastUpdated(LocalDateTime.now());
@@ -308,13 +334,15 @@ public class CourseServiceImpl implements CourseService {
 
         ContentType contentType = parseContentType(request.getContentType());
 
-        CourseContent parent = null;
-        if (request.getParentContentId() != null) {
-            parent = courseContentRepository.findById(request.getParentContentId())
-                    .orElseThrow(() -> new AppException(ErrorCode.COURSE_CONTENT_NOT_FOUND));
-        }
+        CourseContent parent = resolveParent(request.getParentContentId(), courseId, null);
+
+        String title = contentType == ContentType.VOCABULARY
+                ? request.getTitle()
+                : CourseRules.requireTitle(request.getTitle());
+        CourseRules.validateOrder(request.getContentOrder());
 
         String contentData = normalizeContentData(request.getContentData());
+        CertificatePart skill = null;
 
         Exam exam = null;
         List<UUID> vocabularySetIds = null;
@@ -329,28 +357,29 @@ public class CourseServiceImpl implements CourseService {
             }
             contentData = buildVocabularyContentData(vocabularySetIds);
         } else if (contentType == ContentType.HOMEWORK) {
-            exam = resolveExam(request.getExamId(), contentData, courseId);
-            if (exam != null) {
-                // Ghi `examId` vào JSONB luôn để client đọc được, đồng thời set FK.
-                contentData = withExamId(contentData, exam.getExamId());
-            }
+            contentData = CourseRules.validateHomeworkData(contentData, null);
+            exam = isMultipleChoiceHomework(contentData)
+                    ? resolveExam(request.getExamId(), contentData, courseId)
+                    : null;
             // Bài trắc nghiệm BẮT BUỘC có đề thi (học viên cần đề để làm,
             // backend `ExamGrader` cần đề để chấm).
             if (isMultipleChoiceHomework(contentData) && exam == null) {
                 throw new AppException(ErrorCode.COURSE_CONTENT_EXAM_REQUIRED);
             }
+            contentData = exam != null ? withExamId(contentData, exam.getExamId()) : withoutExamId(contentData);
+            skill = resolveHomeworkSkill(course, request.getCertificatePartId());
         }
 
         CourseContent content = CourseContent.builder()
                 .course(course)
                 .contentType(contentType)
                 .parentContent(parent)
-                .title(request.getTitle())
+                .title(title)
                 .description(request.getDescription())
-                .contentOrder(request.getContentOrder() != null ? request.getContentOrder() : 0)
+                .contentOrder(request.getContentOrder() != null ? request.getContentOrder() : nextOrder(courseId))
                 .contentData(contentData)
                 .exam(exam)
-                .certificatePart(resolveCertificatePart(request.getCertificatePartId()))
+                .certificatePart(skill)
                 .build();
 
         content = courseContentRepository.save(content);
@@ -375,18 +404,21 @@ public class CourseServiceImpl implements CourseService {
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
         sessionVariableHelper.setCurrentUserId(currentUserId);
 
+        UUID courseId = content.getCourse().getCourseId();
         if (request.getTitle() != null) {
-            content.setTitle(request.getTitle());
+            content.setTitle(content.getContentType() == ContentType.VOCABULARY
+                    ? request.getTitle()
+                    : CourseRules.requireTitle(request.getTitle()));
         }
         if (request.getDescription() != null) {
             content.setDescription(request.getDescription());
         }
         if (request.getContentOrder() != null) {
+            CourseRules.validateOrder(request.getContentOrder());
             content.setContentOrder(request.getContentOrder());
         }
         if (request.getParentContentId() != null) {
-            content.setParentContent(courseContentRepository.findById(request.getParentContentId())
-                    .orElseThrow(() -> new AppException(ErrorCode.COURSE_CONTENT_NOT_FOUND)));
+            content.setParentContent(resolveParent(request.getParentContentId(), courseId, content.getContentId()));
         }
 
         String contentData = request.getContentData() != null
@@ -401,17 +433,23 @@ public class CourseServiceImpl implements CourseService {
             contentData = buildVocabularyContentData(vocabularySetIds);
             content.setContentData(contentData);
         } else if (content.getContentType() == ContentType.HOMEWORK) {
-            Exam exam = resolveExam(request.getExamId(), contentData, content.getCourse().getCourseId());
-            content.setExam(exam);
-            if (exam != null) {
-                contentData = withExamId(contentData, exam.getExamId());
-            }
+            String previousData = content.getContentData();
+            contentData = CourseRules.validateHomeworkData(contentData, previousData);
+            Exam exam = isMultipleChoiceHomework(contentData)
+                    ? resolveExam(request.getExamId(), contentData, courseId)
+                    : null;
             if (isMultipleChoiceHomework(contentData) && exam == null) {
                 throw new AppException(ErrorCode.COURSE_CONTENT_EXAM_REQUIRED);
             }
+            // Đã có học viên nộp → không cho đổi hình thức nộp / đề / thang điểm (bài nộp cũ sẽ lệch).
+            if (homeworkSubmissionRepository.existsByHomeworkContent_ContentId(contentId)) {
+                assertHomeworkUnchanged(content, contentData, exam);
+            }
+            content.setExam(exam);
+            contentData = exam != null ? withExamId(contentData, exam.getExamId()) : withoutExamId(contentData);
             // Kỹ năng chứng chỉ: chỉ đổi khi request có gửi id (null = giữ nguyên).
             if (request.getCertificatePartId() != null) {
-                content.setCertificatePart(resolveCertificatePart(request.getCertificatePartId()));
+                content.setCertificatePart(resolveHomeworkSkill(content.getCourse(), request.getCertificatePartId()));
             }
             content.setContentData(contentData);
         } else {
@@ -439,6 +477,12 @@ public class CourseServiceImpl implements CourseService {
         UUID currentUserId = SecurityUtils.getCurrentUserId()
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
         sessionVariableHelper.setCurrentUserId(currentUserId);
+
+        // FK homework_submissions ON DELETE CASCADE → xoá bài tập sẽ xoá luôn bài nộp + điểm của học viên.
+        if (content.getContentType() == ContentType.HOMEWORK
+                && homeworkSubmissionRepository.existsByHomeworkContent_ContentId(contentId)) {
+            throw new AppException(ErrorCode.HOMEWORK_HAS_SUBMISSIONS);
+        }
 
         // Nội dung con tham chiếu tới nội dung cha — thả FK để tránh vi phạm ràng buộc.
         // (FK parent_content_id cũng ON DELETE CASCADE, nhưng xoá tường minh giúp
@@ -571,7 +615,74 @@ public class CourseServiceImpl implements CourseService {
                 && !courseId.equals(exam.getCourse().getCourseId())) {
             throw new AppException(ErrorCode.EXAM_NOT_FOUND);
         }
+        // Đề nháp / lưu trữ thì học viên không mở được lượt thi.
+        if (exam.getStatus() != ExamStatus.PUBLISHED) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Đề thi \"" + exam.getExamTitle() + "\" chưa xuất bản, hãy xuất bản đề trước khi gắn vào bài tập");
+        }
         return exam;
+    }
+
+    /** Bỏ `examId` khỏi JSONB khi bài tập không phải trắc nghiệm. */
+    private String withoutExamId(String contentData) {
+        JsonNode node = JsonUtil.parse(contentData);
+        if (node == null || !node.isObject()) {
+            return contentData;
+        }
+        ((ObjectNode) node).remove("examId");
+        return node.toString();
+    }
+
+    /** Nội dung cha phải cùng khóa học và không phải chính nó / con của nó. */
+    private CourseContent resolveParent(UUID parentId, UUID courseId, UUID selfId) {
+        if (parentId == null) {
+            return null;
+        }
+        if (parentId.equals(selfId)) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Nội dung không thể là cha của chính nó");
+        }
+        CourseContent parent = courseContentRepository.findById(parentId)
+                .orElseThrow(() -> new AppException(ErrorCode.COURSE_CONTENT_NOT_FOUND));
+        if (!parent.getCourse().getCourseId().equals(courseId)) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Nội dung cha phải thuộc cùng khóa học");
+        }
+        if (selfId != null && parent.getParentContent() != null
+                && selfId.equals(parent.getParentContent().getContentId())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR, "Không thể chọn nội dung con làm nội dung cha");
+        }
+        return parent;
+    }
+
+    /** Thứ tự tiếp theo của khóa (max + 1) khi admin không nhập. */
+    private int nextOrder(UUID courseId) {
+        return courseContentRepository.findFirstByCourse_CourseIdOrderByContentOrderDesc(courseId)
+                .map(CourseContent::getContentOrder)
+                .map(order -> order == null ? 0 : order + 1)
+                .orElse(0);
+    }
+
+    /** Kỹ năng bài tập đo lường phải thuộc chứng chỉ của khóa học. */
+    private CertificatePart resolveHomeworkSkill(Course course, UUID partId) {
+        CertificatePart part = resolveCertificatePart(partId);
+        if (part != null && course.getCertificate() != null) {
+            CourseRules.validatePartBelongsTo(course.getCertificate(), part);
+        }
+        return part;
+    }
+
+    /** Bài tập đã có bài nộp: hình thức nộp, đề thi, điểm tối đa phải giữ nguyên. */
+    private void assertHomeworkUnchanged(CourseContent content, String newData, Exam newExam) {
+        String oldData = content.getContentData();
+        boolean typeChanged = !Objects.equals(CourseRules.readSubmissionType(oldData),
+                CourseRules.readSubmissionType(newData));
+        UUID oldExamId = content.getExam() != null ? content.getExam().getExamId() : null;
+        UUID newExamId = newExam != null ? newExam.getExamId() : null;
+        BigDecimal oldMax = HomeworkContentData.readNumber(oldData, "maxScore");
+        BigDecimal newMax = HomeworkContentData.readNumber(newData, "maxScore");
+        boolean maxChanged = oldMax == null ? newMax != null : newMax == null || oldMax.compareTo(newMax) != 0;
+        if (typeChanged || !Objects.equals(oldExamId, newExamId) || maxChanged) {
+            throw new AppException(ErrorCode.HOMEWORK_LOCKED);
+        }
     }
 
     /**
@@ -654,15 +765,13 @@ public class CourseServiceImpl implements CourseService {
         if (mentorId == null) {
             return null;
         }
-        return userRepository.findById(mentorId)
+        User mentor = userRepository.findById(mentorId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-    }
-
-    // Điểm đầu vào phải nhỏ hơn điểm mục tiêu (VD khóa 4.0 -> 5.0)
-    private void validateScoreRange(BigDecimal entryScore, BigDecimal targetScore) {
-        if (entryScore != null && targetScore != null && entryScore.compareTo(targetScore) >= 0) {
-            throw new AppException(ErrorCode.COURSE_SCORE_RANGE_INVALID);
+        String role = mentor.getRole() != null ? mentor.getRole().getRoleName() : null;
+        if (role == null || !"MENTOR".equalsIgnoreCase(role)) {
+            throw new AppException(ErrorCode.COURSE_MENTOR_INVALID);
         }
+        return mentor;
     }
 
     private CourseResponse toCourseResponse(Course course) {

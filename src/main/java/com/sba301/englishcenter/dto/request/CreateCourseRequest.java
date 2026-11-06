@@ -1,7 +1,9 @@
 package com.sba301.englishcenter.dto.request;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
@@ -24,11 +26,12 @@ import java.util.UUID;
 public class CreateCourseRequest {
 
     @NotBlank(message = "Mã khóa học không được để trống")
-    @Size(max = 50, message = "Mã khóa học không được vượt quá 50 ký tự")
+    @Size(min = 3, max = 50, message = "Mã khóa học phải từ 3 đến 50 ký tự")
+    @Pattern(regexp = "^[A-Za-z0-9_-]+$", message = "Mã khóa học chỉ gồm chữ không dấu, số, dấu - và _")
     String code;
 
     @NotBlank(message = "Tiêu đề khóa học không được để trống")
-    @Size(max = 255, message = "Tiêu đề không được vượt quá 255 ký tự")
+    @Size(min = 3, max = 255, message = "Tiêu đề phải từ 3 đến 255 ký tự")
     String title;
 
     String description;
@@ -37,6 +40,7 @@ public class CreateCourseRequest {
     String level;
 
     @DecimalMin(value = "0.0", message = "Giá khóa học phải lớn hơn hoặc bằng 0")
+    @DecimalMax(value = "100000000", message = "Giá khóa học tối đa 100.000.000 VND")
     BigDecimal price;
 
     @PositiveOrZero(message = "Điểm mục tiêu phải lớn hơn hoặc bằng 0")

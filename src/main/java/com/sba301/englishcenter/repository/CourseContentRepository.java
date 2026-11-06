@@ -20,6 +20,9 @@ public interface CourseContentRepository extends JpaRepository<CourseContent, UU
 
     long countByCourse_CourseId(UUID courseId);
 
+    /** Nội dung có thứ tự lớn nhất của khóa: dùng để tự đánh số thứ tự cho nội dung mới. */
+    java.util.Optional<CourseContent> findFirstByCourse_CourseIdOrderByContentOrderDesc(UUID courseId);
+
     /** Nội dung con trực tiếp (dùng để xoá dọn cây khi xoá một nội dung cha). */
     List<CourseContent> findByParentContent_ContentId(UUID parentContentId);
 

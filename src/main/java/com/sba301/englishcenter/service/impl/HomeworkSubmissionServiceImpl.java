@@ -57,6 +57,8 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
     private static final String TYPE_TEXT = "text";
     private static final String TYPE_FILE = "file";
     private static final String TYPE_MULTIPLE_CHOICE = "multiple_choice";
+    /** Dung lượng tối đa của file PDF bài nộp. */
+    private static final long MAX_PDF_BYTES = 20L * 1024 * 1024;
 
     private final HomeworkSubmissionRepository submissionRepository;
     private final CourseContentRepository courseContentRepository;
@@ -92,8 +94,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
 
         String submissionType = resolveSubmissionType(homework, request);
         assertSubmissionTypeMatches(homework, submissionType);
-        assertDueDateNotPassed(homework);
-        assertAttemptsNotExceeded(homework, studentId);
+        assertCanAttempt(homework, studentId);
 
         HomeworkSubmission submission = newSubmission(homework, student, request, submissionType);
 
@@ -182,13 +183,17 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
 
     private void applyFile(HomeworkSubmission submission, CreateHomeworkSubmissionRequest request) {
         String publicId = request.getFilePublicId();
+        // Chỉ nhận file đã upload qua chữ ký BE cấp (không nhận URL tự do từ client).
         if (publicId == null || publicId.isBlank()) {
-            // Tương thích ngược: client cũ gửi URL trực tiếp.
-            if (request.getFileUrl() == null || request.getFileUrl().isBlank()) {
-                throw new AppException(ErrorCode.HOMEWORK_FILE_REQUIRED);
-            }
-            submission.setFileUrl(request.getFileUrl());
-            return;
+            throw new AppException(ErrorCode.HOMEWORK_FILE_REQUIRED);
+        }
+        String format = request.getFileFormat() == null ? "" : request.getFileFormat().trim().toLowerCase();
+        String name = request.getFileOriginalName() == null ? "" : request.getFileOriginalName().trim().toLowerCase();
+        if (!"pdf".equals(format) && !name.endsWith(".pdf") && !publicId.toLowerCase().endsWith(".pdf")) {
+            throw new AppException(ErrorCode.HOMEWORK_FILE_TYPE_NOT_ALLOWED, "Bài nộp chỉ nhận file PDF");
+        }
+        if (request.getFileBytes() != null && request.getFileBytes() > MAX_PDF_BYTES) {
+            throw new AppException(ErrorCode.HOMEWORK_FILE_TOO_LARGE, "File PDF tối đa 20 MB");
         }
         submission.setFilePublicId(publicId);
         submission.setFileResourceType(request.getFileResourceType());
@@ -284,6 +289,12 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
             throw new AppException(ErrorCode.HOMEWORK_SUBMISSION_TYPE_MISMATCH,
                     "Bài tập này yêu cầu hình thức nộp: " + configured);
         }
+    }
+
+    @Override
+    public void assertCanAttempt(CourseContent homework, UUID studentId) {
+        assertDueDateNotPassed(homework);
+        assertAttemptsNotExceeded(homework, studentId);
     }
 
     /** Hạn nộp đã qua → không cho nộp. */

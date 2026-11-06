@@ -1,5 +1,6 @@
 package com.sba301.englishcenter.dto.request;
 
+import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -31,6 +32,7 @@ public class UpdateCourseRequest {
     String level;
 
     @DecimalMin(value = "0.0", message = "Giá khóa học phải lớn hơn hoặc bằng 0")
+    @DecimalMax(value = "100000000", message = "Giá khóa học tối đa 100.000.000 VND")
     BigDecimal price;
 
     @PositiveOrZero(message = "Điểm mục tiêu phải lớn hơn hoặc bằng 0")

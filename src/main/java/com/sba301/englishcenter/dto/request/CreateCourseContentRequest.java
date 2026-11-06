@@ -1,5 +1,7 @@
 package com.sba301.englishcenter.dto.request;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import lombok.AccessLevel;
@@ -30,6 +32,9 @@ public class CreateCourseContentRequest {
 
     String description;
 
+    /** Thứ tự hiển thị; để trống → BE tự đánh số tiếp theo. */
+    @Min(value = 0, message = "Thứ tự phải lớn hơn hoặc bằng 0")
+    @Max(value = 9999, message = "Thứ tự tối đa 9999")
     Integer contentOrder;
 
     UUID parentContentId;

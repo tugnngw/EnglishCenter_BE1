@@ -86,6 +86,10 @@ public class UploadService {
         }
 
         String extension = resolveExtension(request.getFileFormat(), request.getFileName());
+        // Bài nộp của học viên: chỉ nhận PDF.
+        if ("submission".equals(purpose) && !"pdf".equals(extension)) {
+            throw new AppException(ErrorCode.HOMEWORK_FILE_TYPE_NOT_ALLOWED, "Bài nộp chỉ nhận file PDF");
+        }
         String resourceType = resolveResourceType(extension);
         long maxBytes = resolveMaxBytes(resourceType);
 

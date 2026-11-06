@@ -60,6 +60,7 @@ public class HomeworkExamService {
     private final ExamAttemptService examAttemptService;
     private final HomeworkSubmissionService homeworkSubmissionService;
     private final HomeworkGradingService gradingService;
+    private final EnrollmentService enrollments;
 
     /**
      * Mở lượt thi cho bài tập trắc nghiệm.
@@ -73,6 +74,11 @@ public class HomeworkExamService {
 
         CourseContent homework = requireMultipleChoiceHomework(homeworkContentId);
         Exam exam = requireLinkedExam(homework);
+        if (!enrollments.isEnrolled(studentId, homework.getCourse().getCourseId())) {
+            throw new AppException(ErrorCode.ENROLLMENT_REQUIRED);
+        }
+        // Hết hạn / hết lượt thì không mở lượt thi mới (trước đây chỉ chặn ở bước nộp).
+        homeworkSubmissionService.assertCanAttempt(homework, studentId);
 
         // `ExamAttemptService` tự kiểm tra quyền làm bài (enrollment / trả phí / trạng thái đề)
         // và tự trả lại lượt thi đang mở nếu có.
@@ -130,12 +136,17 @@ public class HomeworkExamService {
         }
 
         // Đã nộp bài bài tập cho lượt thi này rồi → trả về bản ghi cũ.
+        // (Dùng list: bài cho làm nhiều lần sẽ có nhiều bài nộp — findBy... Optional sẽ lỗi
+        //  IncorrectResultSizeDataAccessException từ lần làm thứ 2.)
         HomeworkSubmission existing = submissionRepository
-                .findByHomeworkContent_ContentIdAndStudent_UserId(
+                .findByHomeworkContent_ContentIdAndStudent_UserIdOrderBySubmittedDateDesc(
                         homework.getContentId(), studentId)
+                .stream()
+                .filter(s -> s.getExamAttempt() != null
+                        && attempt.getAttemptId().equals(s.getExamAttempt().getAttemptId()))
+                .findFirst()
                 .orElse(null);
-        if (existing != null && attempt.getAttemptId().equals(
-                existing.getExamAttempt() != null ? existing.getExamAttempt().getAttemptId() : null)) {
+        if (existing != null) {
             return homeworkSubmissionService.getSubmissionById(existing.getSubmissionId());
         }
 

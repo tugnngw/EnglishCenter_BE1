@@ -27,6 +27,9 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
     /** Số lần đã nộp của một học viên cho một bài tập — kiểm tra giới hạn maxAttempts. */
     long countByHomeworkContent_ContentIdAndStudent_UserId(UUID contentId, UUID studentId);
 
+    /** Bài tập đã có ai nộp chưa: khóa sửa hình thức nộp / chặn xoá bài tập. */
+    boolean existsByHomeworkContent_ContentId(UUID contentId);
+
     /* =====================================================
      * Hàng đợi chấm của mentor
      * ===================================================== */

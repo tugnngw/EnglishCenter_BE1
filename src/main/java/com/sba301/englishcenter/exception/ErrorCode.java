@@ -183,6 +183,14 @@ public enum ErrorCode {
     CONSULTATION_STATUS_INVALID(6041, "Trạng thái yêu cầu tư vấn không hợp lệ", HttpStatus.BAD_REQUEST),
     COURSE_SCORE_RANGE_INVALID(6043, "Điểm đầu vào phải nhỏ hơn điểm mục tiêu của khóa học", HttpStatus.BAD_REQUEST),
     LEARNING_PATH_FORBIDDEN(6042, "Bạn chỉ được sửa / xóa lộ trình do mình tạo", HttpStatus.FORBIDDEN),
+    // Course / homework: ràng buộc nghiệp vụ khi admin dựng khóa học
+    COURSE_SCORE_OUT_OF_SCALE(6044, "Điểm không nằm trong thang điểm của chứng chỉ", HttpStatus.BAD_REQUEST),
+    COURSE_CERTIFICATE_REQUIRED(6045, "Hãy chọn chứng chỉ trước khi nhập điểm hoặc kỹ năng", HttpStatus.BAD_REQUEST),
+    CERTIFICATE_PART_MISMATCH(6046, "Kỹ năng không thuộc chứng chỉ của khóa học", HttpStatus.BAD_REQUEST),
+    COURSE_MENTOR_INVALID(6047, "Người phụ trách phải là tài khoản mentor", HttpStatus.BAD_REQUEST),
+    COURSE_CANNOT_ACTIVATE(6048, "Khóa học cần có học phí và ít nhất 1 nội dung trước khi mở bán", HttpStatus.BAD_REQUEST),
+    HOMEWORK_LOCKED(6049, "Bài tập đã có học viên nộp: không thể đổi hình thức nộp, đề thi hoặc điểm tối đa", HttpStatus.CONFLICT),
+    HOMEWORK_HAS_SUBMISSIONS(6050, "Bài tập đã có bài nộp của học viên, không thể xóa", HttpStatus.CONFLICT),
     ;
 
     private final int code;
