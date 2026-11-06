@@ -4,9 +4,12 @@ import com.sba301.englishcenter.common.enums.DifficultyLevel;
 import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.ExamStatus;
 import com.sba301.englishcenter.common.enums.ExamType;
+import com.sba301.englishcenter.entity.Enrollment;
 import com.sba301.englishcenter.entity.Exam;
 import jakarta.persistence.criteria.JoinType;
 import jakarta.persistence.criteria.Predicate;
+import jakarta.persistence.criteria.Root;
+import jakarta.persistence.criteria.Subquery;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.util.ArrayList;
@@ -80,6 +83,35 @@ public class ExamSpecification {
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    /**
+     * Đề học viên được thấy trong danh sách:
+     * <ul>
+     *     <li>đề khóa học (course): chỉ khi đang ghi danh (active) khóa đó;</li>
+     *     <li>đề thi thử (trial): chỉ đề kiểm tra đầu vào (đề cũ lỡ đặt loại khác bị ẩn);</li>
+     *     <li>đề luyện tập AI (practice): giữ nguyên cách lọc của trang Luyện tập AI.</li>
+     * </ul>
+     *
+     * @param userId học viên đang đăng nhập, {@code null} = khách (không thấy đề khóa học nào)
+     */
+    public static Specification<Exam> visibleToStudent(UUID userId) {
+        return (root, query, cb) -> {
+            Predicate trial = cb.and(cb.equal(root.get("examScope"), ExamScope.TRIAL),
+                    cb.equal(cb.concat(root.get("examType"), ""), ExamType.PLACEMENT_TEST.getValue()));
+            Predicate practice = cb.equal(root.get("examScope"), ExamScope.PRACTICE);
+            if (userId == null) {
+                return cb.or(trial, practice);
+            }
+            Subquery<Integer> enrolled = query.subquery(Integer.class);
+            Root<Enrollment> enrollment = enrolled.from(Enrollment.class);
+            enrolled.select(cb.literal(1)).where(
+                    cb.equal(enrollment.get("studentId"), userId),
+                    cb.equal(enrollment.get("course"), root.get("course")),
+                    cb.equal(enrollment.get("status"), Enrollment.Status.active));
+            Predicate course = cb.and(cb.equal(root.get("examScope"), ExamScope.COURSE), cb.exists(enrolled));
+            return cb.or(trial, practice, course);
         };
     }
 }

@@ -2,6 +2,7 @@ package com.sba301.englishcenter.service;
 
 import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.ExamStatus;
+import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
@@ -20,7 +21,8 @@ import java.util.UUID;
  * <ol>
  *     <li>Đề phải {@code published} và đang trong khung {@code available_from .. available_until};</li>
  *     <li>Đề {@code course}: học viên phải có enrollment của khóa học - hỏi qua
- *     {@link SessionEnrollmentChecker} (gọi EnrollmentService của Dev 4);</li>
+ *     {@link SessionEnrollmentChecker} (gọi EnrollmentService của Dev 4); thi nối tiếp: giữa kỳ cần đạt hết quiz,
+ *     cuối kỳ cần đạt giữa kỳ và đạt đủ bài tập của khóa;</li>
  *     <li>Đề {@code trial} trả phí ({@code is_free = false}): cần giao dịch {@code trial_exam_access}
  *     thành công trong {@code payment_transactions} (bảng của Dev 4, chỉ đọc bằng native query nên không
  *     tạo entity trùng với Dev 4).</li>
@@ -54,6 +56,10 @@ public class ExamAccessPolicy {
             if (courseId == null || !enrollmentChecker.isEnrolled(userId, courseId)) {
                 return Optional.of(ErrorCode.EXAM_ENROLLMENT_REQUIRED);
             }
+            Optional<ErrorCode> prerequisite = checkPrerequisites(userId, courseId, exam);
+            if (prerequisite.isPresent()) {
+                return prerequisite;
+            }
         } else if (Boolean.FALSE.equals(exam.getIsFree()) && !hasPaidTrialAccess(userId, exam.getExamId())) {
             return Optional.of(ErrorCode.EXAM_PAYMENT_REQUIRED);
         }
@@ -64,6 +70,58 @@ public class ExamAccessPolicy {
         check(userId, exam, now).ifPresent(errorCode -> {
             throw new AppException(errorCode);
         });
+    }
+
+    /**
+     * Thi nối tiếp trong một khóa: Giữa kỳ mở khi đã đạt hết Quiz đã công khai của khóa; Cuối kỳ mở khi đã đạt
+     * Giữa kỳ đã công khai của khóa và đạt đủ bài tập. Khóa chưa có Quiz / Giữa kỳ thì bỏ qua điều kiện đó.
+     */
+    private Optional<ErrorCode> checkPrerequisites(UUID userId, UUID courseId, Exam exam) {
+        if (exam.getExamType() == ExamType.MIDTERM) {
+            if (countUnpassedExams(userId, courseId, ExamType.QUIZ) > 0) {
+                return Optional.of(ErrorCode.EXAM_QUIZZES_NOT_PASSED);
+            }
+        } else if (exam.getExamType() == ExamType.FINAL) {
+            if (countUnpassedExams(userId, courseId, ExamType.MIDTERM) > 0) {
+                return Optional.of(ErrorCode.EXAM_MIDTERM_NOT_PASSED);
+            }
+            if (countMissingHomework(userId, courseId) > 0) {
+                return Optional.of(ErrorCode.EXAM_COURSE_NOT_COMPLETED);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** Số đề đã công khai cùng loại trong khóa mà học viên chưa có lượt nào đạt. */
+    long countUnpassedExams(UUID userId, UUID courseId, ExamType type) {
+        Number count = (Number) entityManager.createNativeQuery(
+                        "SELECT COUNT(*) FROM exams e "
+                                + "WHERE e.course_id = :courseId AND CAST(e.exam_type AS text) = :examType "
+                                + "AND CAST(e.status AS text) = 'published' "
+                                + "AND NOT EXISTS (SELECT 1 FROM exam_attempts a "
+                                + "WHERE a.exam_id = e.exam_id AND a.student_id = :studentId AND a.passed = TRUE)")
+                .setParameter("courseId", courseId)
+                .setParameter("examType", type.getValue())
+                .setParameter("studentId", userId)
+                .getSingleResult();
+        return count == null ? 0 : count.longValue();
+    }
+
+    /**
+     * Số bài tập (course_content loại homework) của khóa mà học viên chưa có bài nộp đạt ({@code passed = true},
+     * bài chưa chấm hoặc trượt chưa tính). Đọc bảng của module khóa học bằng native query, không tạo entity trùng.
+     */
+    long countMissingHomework(UUID userId, UUID courseId) {
+        Number count = (Number) entityManager.createNativeQuery(
+                        "SELECT COUNT(*) FROM course_content c "
+                                + "WHERE c.course_id = :courseId AND c.content_type = 'homework' "
+                                + "AND NOT EXISTS (SELECT 1 FROM homework_submissions s "
+                                + "WHERE s.homework_content_id = c.content_id AND s.student_id = :studentId "
+                                + "AND s.passed = TRUE)")
+                .setParameter("courseId", courseId)
+                .setParameter("studentId", userId)
+                .getSingleResult();
+        return count == null ? 0 : count.longValue();
     }
 
     boolean hasPaidTrialAccess(UUID userId, UUID examId) {

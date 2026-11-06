@@ -167,7 +167,7 @@ INSERT INTO exams (exam_id, exam_scope, created_by_user_id, certificate_id, cour
 VALUES ('d3000000-0000-4000-8000-000000000200', 'course',
         (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
         'd3000000-0000-4000-8000-000000000001', 'd3000000-0000-4000-8000-000000000020',
-        'D3-COURSE-QUIZ-01', 'quiz', 'Unit 1 Quiz', 'Bài kiểm tra nhanh Unit 1', 10, 60.00, 0,
+        'D3-COURSE-QUIZ-01', 'quiz', 'Unit 1 Quiz', 'Bài kiểm tra nhanh Unit 1: 2 câu ngữ pháp (to be, số nhiều bất quy tắc), làm trong 10 phút', 10, 60.00, 0,
         TRUE, TRUE, 'easy', 'A2', 'published', CURRENT_TIMESTAMP)
 ON CONFLICT (exam_id) DO NOTHING;
 
