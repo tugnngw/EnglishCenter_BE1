@@ -90,7 +90,27 @@ public class ExamServiceImpl implements ExamService {
             // Không trả hết đề đã công khai: đề khóa học chỉ hiện với học viên đã mua khóa đó
             spec = spec.and(ExamSpecification.visibleToStudent(principal.map(UserPrincipal::getUserId).orElse(null)));
         }
-        return toPage(examRepository.findAll(spec, pageable), false);
+        Page<Exam> exams = examRepository.findAll(spec, pageable);
+        PageResponse<ExamSummaryResponse> result = toPage(exams, false);
+        UUID userId = principal.map(UserPrincipal::getUserId).orElse(null);
+        if (!admin && userId != null) {
+            markLocks(exams.getContent(), result.getData(), userId);
+        }
+        return result;
+    }
+
+    /** Gắn trạng thái khóa + lý do vào từng đề của trang (mỗi khóa học chỉ truy vấn một lần). */
+    private void markLocks(List<Exam> exams, List<ExamSummaryResponse> summaries, UUID userId) {
+        ExamAccessPolicy.Session session = accessPolicy.session(userId, LocalDateTime.now());
+        for (int i = 0; i < exams.size(); i++) {
+            ExamSummaryResponse summary = summaries.get(i);
+            Optional<ExamAccessPolicy.Denial> denial = session.evaluate(exams.get(i));
+            summary.setAccessible(denial.isEmpty());
+            denial.ifPresent(d -> {
+                summary.setLockCode(d.code().getCode());
+                summary.setLockReason(d.message());
+            });
+        }
     }
 
     @Override
@@ -119,11 +139,13 @@ public class ExamServiceImpl implements ExamService {
             throw new AppException(ErrorCode.EXAM_NOT_FOUND);
         }
         UUID userId = principal.map(UserPrincipal::getUserId).orElse(null);
-        Optional<ErrorCode> denied = accessPolicy.check(userId, exam, LocalDateTime.now());
+        Optional<ExamAccessPolicy.Denial> denied = accessPolicy.evaluate(userId, exam, LocalDateTime.now());
         Boolean accessible = userId == null ? null : denied.isEmpty();
-        String message = denied.map(ErrorCode::getMessage).orElse(null);
+        String message = denied.map(ExamAccessPolicy.Denial::message).orElse(null);
         // Nội dung câu hỏi chỉ được giao trong lượt thi (có đồng hồ) - xem POST /exams/{id}/attempts
-        return buildDetail(exam, ExamMapper.View.OUTLINE, accessible, message);
+        ExamDetailResponse detail = buildDetail(exam, ExamMapper.View.OUTLINE, accessible, message);
+        denied.ifPresent(d -> detail.setAccessCode(d.code().getCode()));
+        return detail;
     }
 
     // ============================================
@@ -412,10 +434,15 @@ public class ExamServiceImpl implements ExamService {
     }
 
     private ExamDetailResponse buildDetail(Exam exam, ExamMapper.View view, Boolean accessible, String message) {
-        return examMapper.toDetail(exam,
+        ExamDetailResponse detail = examMapper.toDetail(exam,
                 sectionRepository.findByExam_ExamIdOrderBySectionOrderAscCreatedAtAsc(exam.getExamId()),
                 exam.getExamId() == null ? List.of() : examQuestionRepository.findDetailedByExamId(exam.getExamId()),
                 view, accessible, message);
+        if (view == ExamMapper.View.ADMIN) {
+            List<String> warnings = accessPolicy.courseSetupWarnings(exam);
+            detail.setWarnings(warnings.isEmpty() ? null : warnings);
+        }
+        return detail;
     }
 
     /**

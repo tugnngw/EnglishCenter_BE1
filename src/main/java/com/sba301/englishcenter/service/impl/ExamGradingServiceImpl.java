@@ -2,6 +2,9 @@ package com.sba301.englishcenter.service.impl;
 
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.AttemptStatus;
+import com.sba301.englishcenter.service.NotificationService;
+import com.sba301.englishcenter.common.enums.NotificationType;
+import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.common.enums.RoleName;
@@ -57,6 +60,7 @@ public class ExamGradingServiceImpl implements ExamGradingService {
     private final UserRepository userRepository;
     private final ExamGrader grader;
     private final ExamMapper examMapper;
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -129,10 +133,14 @@ public class ExamGradingServiceImpl implements ExamGradingService {
         ExamGrader.Summary summary = grader.grade(attempt, examQuestions, answers, exam.getPassingScore());
         answerRepository.saveAll(answers.values());
 
-        if (!summary.pendingManual() && attempt.getStatus() == AttemptStatus.SUBMITTED) {
+        boolean justGraded = !summary.pendingManual() && attempt.getStatus() == AttemptStatus.SUBMITTED;
+        if (justGraded) {
             attempt.setStatus(AttemptStatus.GRADED);
         }
         attemptRepository.save(attempt);
+        if (justGraded) {
+            notifyGraded(attempt, exam);
+        }
 
         exam.setAverageScore(attemptRepository.averageScoreByExamId(exam.getExamId(),
                 ExamAttemptServiceImpl.FINISHED_STATUSES).setScale(2, RoundingMode.HALF_UP));
@@ -141,6 +149,30 @@ public class ExamGradingServiceImpl implements ExamGradingService {
         log.info("{} chấm câu {} của lượt thi {}: {} điểm (còn chờ chấm: {})", principal.getUserId(), questionId,
                 attemptId, request.getScore(), summary.pendingManual());
         return examMapper.toResult(attempt, examQuestions, answers, true);
+    }
+
+    /**
+     * Báo học viên khi mentor chấm xong lượt thi. Đề Quiz / Giữa kỳ của khóa đạt thì nhắc đề tiếp theo
+     * có thể đã mở (luật thi nối tiếp ở ExamAccessPolicy).
+     */
+    private void notifyGraded(ExamAttempt attempt, Exam exam) {
+        boolean passed = Boolean.TRUE.equals(attempt.getPassed());
+        StringBuilder message = new StringBuilder("Đề \"").append(exam.getExamTitle()).append("\" đã được chấm: ")
+                .append(passed ? "Đạt" : "Chưa đạt").append('.');
+        if (passed && exam.getExamScope() == ExamScope.COURSE) {
+            if (exam.getExamType() == ExamType.QUIZ) {
+                message.append(" Đạt hết Quiz của khóa là mở được đề Giữa kỳ.");
+            } else if (exam.getExamType() == ExamType.MIDTERM) {
+                message.append(" Đạt đủ bài tập của khóa là mở được đề Cuối kỳ.");
+            }
+        }
+        try {
+            notificationService.notify(attempt.getStudent().getUserId(), NotificationType.exam_result,
+                    "Bài thi đã được chấm", message.toString());
+        } catch (RuntimeException ex) {
+            // Không để lỗi gửi thông báo làm hỏng kết quả chấm
+            log.warn("Không gửi được thông báo chấm bài cho lượt thi {}: {}", attempt.getAttemptId(), ex.getMessage());
+        }
     }
 
     /** Admin chấm mọi đề; mentor chấm mọi đề thi thử (trial) và đề của khóa học mình phụ trách. */

@@ -112,6 +112,8 @@ public enum ErrorCode {
     EXAM_COURSE_NOT_COMPLETED(5030, "Cần đạt đủ bài tập của khóa học trước khi thi cuối kỳ", HttpStatus.FORBIDDEN),
     EXAM_QUIZZES_NOT_PASSED(5031, "Cần đạt hết các bài Quiz của khóa học trước khi thi giữa kỳ", HttpStatus.FORBIDDEN),
     EXAM_MIDTERM_NOT_PASSED(5032, "Cần đạt bài thi giữa kỳ trước khi thi cuối kỳ", HttpStatus.FORBIDDEN),
+    EXAM_PREREQUISITE_PENDING_GRADING(5033, "Bài trước đang chờ mentor chấm; đề sẽ mở khi bài được chấm đạt",
+            HttpStatus.FORBIDDEN),
     // === Dev 2.5 - Bài tập: nộp bài, chấm điểm, lưu trữ file ===
     HOMEWORK_SUBMISSION_TYPE_MISMATCH(3020,
             "Hình thức nộp không khớp với bài tập",

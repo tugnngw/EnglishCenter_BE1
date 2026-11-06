@@ -61,6 +61,15 @@ public class ExamSummaryResponse {
     /** true nếu là đề của khóa học (phải có enrollment mới được làm). */
     Boolean requiresEnrollment;
 
+    /** Học viên đăng nhập có làm được đề không (null với khách / admin). */
+    Boolean accessible;
+
+    /** Mã lỗi khi bị khóa (VD 5031 chưa đạt Quiz, 5033 đang chờ chấm) - FE chọn biểu tượng. */
+    Integer lockCode;
+
+    /** Lý do bị khóa, có số liệu (VD "Cần đạt hết bài Quiz... (đã đạt 1/3)"). */
+    String lockReason;
+
     /** Thống kê - chỉ trả cho admin. */
     Integer totalAttempts;
     BigDecimal averageScore;

@@ -238,6 +238,10 @@ class ExamFlowIntegrationTest {
         assertThat((Double) graded.read("$.result.attempt.score")).isEqualTo(8.5);
         assertThat(call(get("/api/v1/me/exam-attempts/" + attemptId + "/result"), student, null).body())
                 .contains("Good structure");
+        // Học viên nhận đúng 1 thông báo khi bài được chấm xong (chấm lại không gửi thêm)
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM notifications WHERE user_id = ? "
+                        + "AND type = 'exam_result' AND title = 'Bài thi đã được chấm'", Integer.class,
+                ((UserPrincipal) student.getPrincipal()).getUserId())).isEqualTo(1);
 
         // ---------- Hết giờ
         jdbc.update("UPDATE exams SET max_attempts = 0 WHERE exam_id = ?::uuid", examId);
@@ -406,9 +410,21 @@ class ExamFlowIntegrationTest {
         jdbc.update("DELETE FROM exams WHERE course_id = ?::uuid AND exam_id <> ?::uuid", courseId, courseQuiz);
         String midterm = publishCourseExam(courseId, "midterm");
         String finalExam = publishCourseExam(courseId, "final");
+        // Admin được cảnh báo khi bộ đề của khóa chưa đủ (khóa chưa có bài tập)
+        assertThat((List<String>) call(get("/api/v1/admin/exams/" + finalExam), admin, null)
+                .read("$.result.warnings")).anyMatch(w -> w.contains("bài tập"));
         UUID homework = UUID.randomUUID();
         jdbc.update("INSERT INTO course_content (content_id, course_id, content_type, title) "
                 + "VALUES (?, ?::uuid, 'homework', 'Unit 1 homework')", homework, courseId);
+        assertThat(call(get("/api/v1/admin/exams/" + finalExam), admin, null).body()).doesNotContain("\"warnings\"");
+
+        // Danh sách đề cho biết đề nào đang khóa và vì sao
+        Response list = call(get("/api/v1/exams?size=100"), student, null);
+        assertThat((List<Integer>) list.read("$.data[?(@.examId=='" + midterm + "')].lockCode")).containsExactly(5031);
+        assertThat((List<String>) list.read("$.data[?(@.examId=='" + midterm + "')].lockReason"))
+                .anyMatch(r -> r.contains("0/1"));
+        assertThat((List<Boolean>) list.read("$.data[?(@.examId=='" + courseQuiz + "')].accessible"))
+                .containsExactly(true);
 
         // ---------- Thi nối tiếp: Quiz -> Giữa kỳ -> Cuối kỳ
         // Giữa kỳ: chưa đạt Quiz của khóa -> 5031
@@ -419,19 +435,25 @@ class ExamFlowIntegrationTest {
         // Quiz không có điều kiện
         Response quizAttempt = call(post("/api/v1/exams/" + courseQuiz + "/attempts"), student, null);
         assertThat(quizAttempt.status()).as(quizAttempt.body()).isEqualTo(200);
+        // Quiz đã nộp, đang chờ mentor chấm -> Giữa kỳ báo "đang chờ chấm" (5033), không phải "chưa đạt"
+        jdbc.update("UPDATE exam_attempts SET status = 'submitted', passed = FALSE "
+                + "WHERE exam_id = ?::uuid AND student_id = ?", courseQuiz, studentId);
+        assertThat((Integer) call(post("/api/v1/exams/" + midterm + "/attempts"), student, null).read("$.code"))
+                .isEqualTo(5033);
         markPassed(courseQuiz, studentId);
         // Đạt Quiz -> Giữa kỳ mở; Cuối kỳ vẫn khóa vì chưa đạt Giữa kỳ -> 5032
         assertThat(call(post("/api/v1/exams/" + midterm + "/attempts"), student, null).status()).isEqualTo(200);
         assertThat((Integer) call(post("/api/v1/exams/" + finalExam + "/attempts"), student, null).read("$.code"))
                 .isEqualTo(5032);
         markPassed(midterm, studentId);
-        // Đạt Giữa kỳ nhưng bài tập chưa nộp / nộp chưa chấm -> 5030
+        // Đạt Giữa kỳ nhưng bài tập chưa nộp -> 5030
         assertThat((Integer) call(post("/api/v1/exams/" + finalExam + "/attempts"), student, null).read("$.code"))
                 .isEqualTo(5030);
         jdbc.update("INSERT INTO homework_submissions (homework_content_id, student_id, answer_content) "
                 + "VALUES (?, ?, 'done')", homework, studentId);
+        // Bài tập đã nộp, chưa chấm -> đang chờ chấm
         assertThat((Integer) call(post("/api/v1/exams/" + finalExam + "/attempts"), student, null).read("$.code"))
-                .isEqualTo(5030);
+                .isEqualTo(5033);
         // Bài tập đạt -> Cuối kỳ mở
         jdbc.update("UPDATE homework_submissions SET passed = TRUE WHERE homework_content_id = ?", homework);
         Response finalAttempt = call(post("/api/v1/exams/" + finalExam + "/attempts"), student, null);

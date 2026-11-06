@@ -35,6 +35,12 @@ public class ExamDetailResponse {
     /** Lý do không được làm (khi accessible = false). */
     String accessMessage;
 
+    /** Mã lỗi khi accessible = false (VD 5033 đang chờ chấm). */
+    Integer accessCode;
+
+    /** Chỉ admin: bộ đề của khóa chưa đủ nên luật thi nối tiếp bị bỏ qua. */
+    List<String> warnings;
+
     /** true nếu response có chứa nội dung câu hỏi. */
     Boolean questionsIncluded;
 
