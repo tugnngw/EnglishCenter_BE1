@@ -17,6 +17,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +45,29 @@ public class Certificate extends BaseEntity {
 
     @Column(name = "description", columnDefinition = "TEXT")
     private String description;
+
+    @Builder.Default
+    @Column(name = "min_score", precision = 6, scale = 2)
+    private BigDecimal minScore = BigDecimal.ZERO;
+
+    @Builder.Default
+    @Column(name = "max_score", precision = 6, scale = 2)
+    private BigDecimal maxScore = BigDecimal.TEN;
+
+    @Builder.Default
+    @Column(name = "score_step", precision = 6, scale = 2)
+    private BigDecimal scoreStep = new BigDecimal("0.50");
+
+    @Builder.Default
+    @Column(name = "score_unit", length = 50)
+    private String scoreUnit = "Điểm";
+
+    @Builder.Default
+    @Column(name = "scale_type", length = 50)
+    private String scaleType = "AVERAGE";
+
+    @Column(name = "rounding_rule", length = 50)
+    private String roundingRule;
 
     @OneToMany(mappedBy = "certificate", fetch = FetchType.LAZY)
     @Builder.Default

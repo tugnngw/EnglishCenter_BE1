@@ -144,9 +144,8 @@ public class AdminController {
 
     @PostMapping("/mentors")
     @Operation(summary = "Create mentor account",
-            description = "Create new mentor with temporary password. The temp password is emailed to the mentor " +
-                    "(mandatory password change on first login) and also returned in the response " +
-                    "as a fallback for the admin if email delivery fails.")
+            description = "Create new mentor with random temporary password sent directly to mentor's email. " +
+                    "Admin does not receive the password to ensure security.")
     public ApiResponse<CreateMentorResponse> createMentor(
             @Valid @RequestBody CreateMentorRequest request) {
         return ApiResponse.success(mentorService.createMentor(request));

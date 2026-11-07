@@ -68,14 +68,23 @@ public class CertificateServiceImpl implements CertificateService {
         User creator = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
-        Certificate certificate = Certificate.builder()
+        Certificate.CertificateBuilder certBuilder = Certificate.builder()
                 .certificateName(request.getCertificateName())
                 .description(request.getDescription())
-                .createdByUser(creator)
-                .build();
+                .createdByUser(creator);
+
+        if (request.getMinScore() != null) certBuilder.minScore(request.getMinScore());
+        if (request.getMaxScore() != null) certBuilder.maxScore(request.getMaxScore());
+        if (request.getScoreStep() != null) certBuilder.scoreStep(request.getScoreStep());
+        if (request.getScoreUnit() != null) certBuilder.scoreUnit(request.getScoreUnit());
+        if (request.getScaleType() != null) certBuilder.scaleType(request.getScaleType());
+        if (request.getRoundingRule() != null) certBuilder.roundingRule(request.getRoundingRule());
+
+        Certificate certificate = certBuilder.build();
 
         // Kiểm tra cấu hình thang điểm trước khi ghi DB (bảo vệ dữ liệu ở server)
-        CertificateScoringValidator.validate(request.getDescription(), request.getParts());
+        CertificateScoringValidator.validate(certificate.getMinScore(), certificate.getMaxScore(),
+                certificate.getScoreStep(), certificate.getScaleType(), request.getDescription(), request.getParts());
 
         certificate = certificateRepository.save(certificate);
 
@@ -116,10 +125,29 @@ public class CertificateServiceImpl implements CertificateService {
         if (request.getDescription() != null) {
             certificate.setDescription(request.getDescription());
         }
+        if (request.getMinScore() != null) {
+            certificate.setMinScore(request.getMinScore());
+        }
+        if (request.getMaxScore() != null) {
+            certificate.setMaxScore(request.getMaxScore());
+        }
+        if (request.getScoreStep() != null) {
+            certificate.setScoreStep(request.getScoreStep());
+        }
+        if (request.getScoreUnit() != null) {
+            certificate.setScoreUnit(request.getScoreUnit());
+        }
+        if (request.getScaleType() != null) {
+            certificate.setScaleType(request.getScaleType());
+        }
+        if (request.getRoundingRule() != null) {
+            certificate.setRoundingRule(request.getRoundingRule());
+        }
         certificate.setLastUpdated(LocalDateTime.now());
 
         // Kiểm tra cấu hình thang điểm trước khi ghi DB (bảo vệ dữ liệu ở server)
-        CertificateScoringValidator.validate(certificate.getDescription(), request.getParts());
+        CertificateScoringValidator.validate(certificate.getMinScore(), certificate.getMaxScore(),
+                certificate.getScoreStep(), certificate.getScaleType(), certificate.getDescription(), request.getParts());
 
         certificate = certificateRepository.save(certificate);
 
@@ -215,6 +243,12 @@ public class CertificateServiceImpl implements CertificateService {
                 .certificateId(certificate.getCertificateId())
                 .certificateName(certificate.getCertificateName())
                 .description(certificate.getDescription())
+                .minScore(certificate.getMinScore())
+                .maxScore(certificate.getMaxScore())
+                .scoreStep(certificate.getScoreStep())
+                .scoreUnit(certificate.getScoreUnit())
+                .scaleType(certificate.getScaleType())
+                .roundingRule(certificate.getRoundingRule())
                 .partCount(count)
                 .createdAt(certificate.getCreatedAt())
                 .lastUpdated(certificate.getLastUpdated())
@@ -230,6 +264,12 @@ public class CertificateServiceImpl implements CertificateService {
                 .certificateId(certificate.getCertificateId())
                 .certificateName(certificate.getCertificateName())
                 .description(certificate.getDescription())
+                .minScore(certificate.getMinScore())
+                .maxScore(certificate.getMaxScore())
+                .scoreStep(certificate.getScoreStep())
+                .scoreUnit(certificate.getScoreUnit())
+                .scaleType(certificate.getScaleType())
+                .roundingRule(certificate.getRoundingRule())
                 .partCount(partResponses.size())
                 .parts(partResponses)
                 .createdAt(certificate.getCreatedAt())

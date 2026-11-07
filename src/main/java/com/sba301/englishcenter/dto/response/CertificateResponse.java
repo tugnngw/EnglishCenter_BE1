@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -23,6 +24,12 @@ public class CertificateResponse {
     UUID certificateId;
     String certificateName;
     String description;
+    BigDecimal minScore;
+    BigDecimal maxScore;
+    BigDecimal scoreStep;
+    String scoreUnit;
+    String scaleType;
+    String roundingRule;
     Integer partCount;
     List<CertificatePartResponse> parts;
     LocalDateTime createdAt;

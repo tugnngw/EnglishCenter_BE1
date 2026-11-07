@@ -6,12 +6,14 @@ import com.sba301.englishcenter.dto.request.UpdateMentorRequest;
 import com.sba301.englishcenter.dto.response.CreateMentorResponse;
 import com.sba301.englishcenter.dto.response.MentorResponse;
 import com.sba301.englishcenter.dto.response.MentorStatsResponse;
+import com.sba301.englishcenter.entity.Certificate;
 import com.sba301.englishcenter.entity.MentorProfile;
 import com.sba301.englishcenter.entity.Role;
 import com.sba301.englishcenter.entity.StudentProfile;
 import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
+import com.sba301.englishcenter.repository.CertificateRepository;
 import com.sba301.englishcenter.repository.MentorProfileRepository;
 import com.sba301.englishcenter.repository.RoleRepository;
 import com.sba301.englishcenter.repository.StudentProfileRepository;
@@ -34,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @Service
@@ -45,6 +48,7 @@ public class MentorServiceImpl implements MentorService {
     private final RoleRepository roleRepository;
     private final MentorProfileRepository mentorProfileRepository;
     private final StudentProfileRepository studentProfileRepository;
+    private final CertificateRepository certificateRepository;
     private final PasswordEncoder passwordEncoder;
     private final SessionVariableHelper sessionVariableHelper;
     private final EmailService emailService;
@@ -115,8 +119,7 @@ public class MentorServiceImpl implements MentorService {
 
         mentorProfileRepository.save(profile);
 
-        // Gửi mật khẩu tạm về email mentor. Lỗi email không rollback việc tạo mentor —
-        // tempPassword vẫn trả về trong response để admin gửi thủ công làm fallback.
+        // Gửi mật khẩu tạm trực tiếp về email mentor. Admin không được thấy mật khẩu để đảm bảo bảo mật.
         try {
             emailService.sendMentorWelcomeEmail(mentor.getEmail(), mentor.getFullName(), tempPassword);
         } catch (Exception e) {
@@ -127,10 +130,7 @@ public class MentorServiceImpl implements MentorService {
 
         return CreateMentorResponse.builder()
                 .mentor(toMentorResponse(mentor, profile))
-                .tempPassword(tempPassword)
-                .note("Mật khẩu tạm đã được gửi tới email của mentor. " +
-                      "Mentor phải đổi mật khẩu trong lần đăng nhập đầu tiên. " +
-                      "Nếu email lỗi, admin có thể gửi thủ công mật khẩu bên dưới.")
+                .note("Mật khẩu đăng nhập ban đầu đã được hệ thống gửi trực tiếp tới email của mentor.")
                 .build();
     }
 
@@ -257,13 +257,64 @@ public class MentorServiceImpl implements MentorService {
     @Override
     @Transactional(readOnly = true)
     public MentorStatsResponse getMentorStats() {
+        List<MentorProfile> allProfiles = mentorProfileRepository.findAll();
+
+        // Lọc mentor thật (có role MENTOR)
+        List<MentorProfile> mentorProfiles = allProfiles.stream()
+                .filter(p -> "MENTOR".equals(p.getUser().getRole().getRoleName()))
+                .toList();
+
+        long total = mentorProfiles.size();
+        long active = mentorProfiles.stream()
+                .filter(p -> Boolean.TRUE.equals(p.getUser().getIsActive()))
+                .count();
+        long inactive = total - active;
+
+        LocalDateTime since = LocalDateTime.now().minusDays(NEW_MENTOR_DAYS);
+        long newLast30Days = mentorProfiles.stream()
+                .filter(p -> {
+                    LocalDateTime joined = p.getMentorRegisteredAt() != null
+                            ? p.getMentorRegisteredAt()
+                            : p.getCreatedAt();
+                    return joined != null && !joined.isBefore(since);
+                })
+                .count();
+
+        List<String> departments = mentorProfiles.stream()
+                .map(MentorProfile::getDepartment)
+                .filter(d -> d != null && !d.isBlank())
+                .map(String::trim)
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+
+        // Lấy danh mục chứng chỉ từ bảng certificates trong DB
+        List<String> specializations = certificateRepository.findAll().stream()
+                .map(Certificate::getCertificateName)
+                .filter(s -> s != null && !s.isBlank())
+                .map(String::trim)
+                .distinct()
+                .sorted(String.CASE_INSENSITIVE_ORDER)
+                .toList();
+
+        // Dự phòng: nếu bảng certificates chưa có dữ liệu thì lấy từ specialization hiện có của mentor
+        if (specializations.isEmpty()) {
+            specializations = mentorProfiles.stream()
+                    .map(MentorProfile::getSpecialization)
+                    .filter(s -> s != null && !s.isBlank())
+                    .map(String::trim)
+                    .distinct()
+                    .sorted(String.CASE_INSENSITIVE_ORDER)
+                    .toList();
+        }
+
         return MentorStatsResponse.builder()
-                .total(mentorProfileRepository.countMentors())
-                .active(mentorProfileRepository.countMentorsByActive(true))
-                .inactive(mentorProfileRepository.countMentorsByActive(false))
-                .newLast30Days(mentorProfileRepository.countMentorsJoinedSince(
-                        LocalDateTime.now().minusDays(NEW_MENTOR_DAYS)))
-                .departments(mentorProfileRepository.findDistinctDepartments())
+                .total(total)
+                .active(active)
+                .inactive(inactive)
+                .newLast30Days(newLast30Days)
+                .departments(departments)
+                .specializations(specializations)
                 .build();
     }
 

@@ -39,11 +39,20 @@ public final class CertificateScoringValidator {
      */
     public static void validate(String description,
                                 List<CreateCertificateRequest.PartRequest> parts) {
+        validate(null, null, null, null, description, parts);
+    }
+
+    public static void validate(BigDecimal minScore,
+                                BigDecimal maxScore,
+                                BigDecimal step,
+                                String scaleType,
+                                String description,
+                                List<CreateCertificateRequest.PartRequest> parts) {
         if (parts == null || parts.isEmpty()) {
             return;
         }
 
-        ScoringConfig config = ScoringConfig.from(description);
+        ScoringConfig config = ScoringConfig.of(minScore, maxScore, step, scaleType, description);
         if (config == null) {
             // Chứng chỉ chưa cấu hình thang điểm → chỉ kiểm tra dữ liệu cơ bản của từng kỹ năng
             for (CreateCertificateRequest.PartRequest part : parts) {
@@ -124,8 +133,18 @@ public final class CertificateScoringValidator {
         return String.valueOf(value);
     }
 
-    /** Cấu hình thang điểm của chứng chỉ, đọc từ JSON trong {@code description}. */
+    /** Cấu hình thang điểm của chứng chỉ, đọc từ cột DB hoặc JSON trong {@code description}. */
     private record ScoringConfig(String scaleType, double minScore, double maxScore, double step) {
+
+        static ScoringConfig of(BigDecimal minScore, BigDecimal maxScore, BigDecimal step, String scaleType, String description) {
+            if (maxScore != null && maxScore.doubleValue() > 0) {
+                double min = minScore != null ? minScore.doubleValue() : 0.0;
+                double s = step != null && step.doubleValue() > 0 ? step.doubleValue() : 0.5;
+                String type = scaleType != null && !scaleType.isBlank() ? scaleType : "AVERAGE";
+                return new ScoringConfig(type, min, maxScore.doubleValue(), s);
+            }
+            return from(description);
+        }
 
         static ScoringConfig from(String description) {
             if (description == null || description.isBlank()) {

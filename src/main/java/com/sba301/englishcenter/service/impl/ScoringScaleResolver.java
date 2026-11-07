@@ -67,7 +67,14 @@ public class ScoringScaleResolver {
                 }
             }
         }
-        // 2. Thang chung của chứng chỉ
+        // 2. Thang chung của chứng chỉ (ưu tiên cột DB trực tiếp)
+        if (cert.getMaxScore() != null && cert.getMaxScore().signum() > 0) {
+            BigDecimal min = cert.getMinScore() != null ? cert.getMinScore() : BigDecimal.ZERO;
+            BigDecimal step = cert.getScoreStep() != null && cert.getScoreStep().signum() > 0
+                    ? cert.getScoreStep()
+                    : new BigDecimal("0.5");
+            return new ScoringScale(name, min, cert.getMaxScore(), step);
+        }
         ScoringScale scale = fromJson(name, scoringNodeOf(cert.getDescription()));
         return scale != null ? scale : new ScoringScale(name, ScoringScale.IELTS.minScore(),
                 ScoringScale.IELTS.maxScore(), ScoringScale.IELTS.step());

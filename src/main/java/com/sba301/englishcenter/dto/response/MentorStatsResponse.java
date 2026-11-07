@@ -27,4 +27,6 @@ public class MentorStatsResponse {
     long newLast30Days;
     /** Các department đang dùng, dùng cho dropdown lọc */
     List<String> departments;
+    /** Các specialization đang dùng, dùng cho dropdown chọn chứng chỉ */
+    List<String> specializations;
 }

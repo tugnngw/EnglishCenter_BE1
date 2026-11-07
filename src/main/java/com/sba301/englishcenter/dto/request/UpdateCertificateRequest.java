@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Getter
@@ -23,6 +24,13 @@ public class UpdateCertificateRequest {
     String certificateName;
 
     String description;
+
+    BigDecimal minScore;
+    BigDecimal maxScore;
+    BigDecimal scoreStep;
+    String scoreUnit;
+    String scaleType;
+    String roundingRule;
 
     /** Danh sách các kỹ năng/phần cập nhật cho chứng chỉ. */
     List<CreateCertificateRequest.PartRequest> parts;
