@@ -12,6 +12,7 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 @Getter
 @Setter
@@ -28,11 +29,13 @@ public class UpdateMentorRequest {
     @Size(max = 20, message = "Số điện thoại không được vượt quá 20 ký tự")
     String phone;
 
-    @NotBlank(message = "Chuyên môn không được để trống")
+    UUID certificateId;
+
+    BigDecimal certificateScore;
+
     @Size(max = 255, message = "Chuyên môn không được vượt quá 255 ký tự")
     String specialization;
 
-    @NotBlank(message = "Phân khoa không được để trống")
     @Size(max = 255, message = "Phân khoa không được vượt quá 255 ký tự")
     String department;
 

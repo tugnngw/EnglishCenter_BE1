@@ -70,6 +70,13 @@ public final class CourseRules {
     public static Scale resolveScale(Certificate certificate, CertificatePart part) {
         Scale scale = part != null ? scaleFromJson(JsonUtil.parse(part.getProperties())) : null;
         if (scale == null && certificate != null) {
+            if (certificate.getMaxScore() != null && certificate.getMaxScore().signum() > 0) {
+                BigDecimal min = certificate.getMinScore() != null ? certificate.getMinScore() : BigDecimal.ZERO;
+                BigDecimal step = certificate.getScoreStep() != null && certificate.getScoreStep().signum() > 0
+                        ? certificate.getScoreStep()
+                        : new BigDecimal("0.5");
+                return new Scale(min, certificate.getMaxScore(), step);
+            }
             JsonNode root = JsonUtil.parse(certificate.getDescription());
             scale = root != null && root.isObject() ? scaleFromJson(root.get("scoring")) : null;
         }
