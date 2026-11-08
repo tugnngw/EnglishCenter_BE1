@@ -172,8 +172,9 @@ public class PaymentServiceImpl implements PaymentService {
     @Override @Transactional(readOnly = true)
     public PaymentOrderResponse adminOrder(UUID id) {
         var order = orders.findById(id).orElseThrow(() -> new AppException(ErrorCode.PAYMENT_ORDER_NOT_FOUND));
-        String studentName = users.findById(order.getStudentId()).map(User::getFullName).orElse(null);
-        return response(order, studentName);
+        var buyer = users.findById(order.getStudentId());
+        return response(order, buyer.map(User::getFullName).orElse(null),
+                buyer.map(User::getEmail).orElse(null), buyer.map(User::getPhone).orElse(null));
     }
 
     @Override @Transactional
@@ -348,6 +349,10 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     private PaymentOrderResponse response(PaymentOrder order, String studentName) {
+        return response(order, studentName, null, null);
+    }
+
+    private PaymentOrderResponse response(PaymentOrder order, String studentName, String studentEmail, String studentPhone) {
         PaymentOrderStatus status = order.getStatus();
         if (status == PaymentOrderStatus.PENDING && !order.getExpiresAt().isAfter(Instant.now())) status = PaymentOrderStatus.EXPIRED;
         String qr = status == PaymentOrderStatus.PENDING ? "https://vietqr.app/img?acc=" + encode(order.getAccountNumber())
@@ -356,7 +361,7 @@ public class PaymentServiceImpl implements PaymentService {
         return new PaymentOrderResponse(order.getOrderId(), order.getOrderCode(), order.getStudentId(), order.getCourseId(), order.getCourseTitle(),
                 order.getAmount(), "VND", status, order.getCreatedAt(), order.getExpiresAt(), order.getPaidAt(),
                 order.getBankCode(), order.getAccountNumber(), order.getAccountName(), order.getOrderCode(), qr,
-                order.getOrderType(), order.getBookingId(), studentName);
+                order.getOrderType(), order.getBookingId(), studentName, studentEmail, studentPhone);
     }
 
     private String encode(String value) { return URLEncoder.encode(value, StandardCharsets.UTF_8); }

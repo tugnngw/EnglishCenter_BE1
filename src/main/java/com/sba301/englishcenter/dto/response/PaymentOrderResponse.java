@@ -10,4 +10,6 @@ public record PaymentOrderResponse(UUID orderId, String orderCode, UUID studentI
         BigDecimal amount, String currency, PaymentOrderStatus status, Instant createdAt,
         Instant expiresAt, Instant paidAt, String bankCode, String accountNumber,
         String accountName, String transferContent, String qrUrl,
-        PaymentOrderType orderType, UUID bookingId, String studentName) {}
+        PaymentOrderType orderType, UUID bookingId, String studentName,
+        // Liên hệ người mua: chỉ trả về ở API chi tiết đơn của admin, các API khác để null
+        String studentEmail, String studentPhone) {}

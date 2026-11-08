@@ -28,6 +28,35 @@ URL: `https://<current-ngrok-domain>/api/v1/payments/sepay/webhook`, with ngrok 
 Ordinary bank accounts are supported in this version; VA/subAccount settlement is held for review.
 Test mode uses simulated transactions; do not transfer real money to generated test accounts or QR codes.
 
+### Deployed backend (Render)
+
+1. In Render, open the backend service -> Environment and set all six `SEPAY_*` variables above.
+   The four account/secret values in `render.yaml` use `sync: false` and must be supplied privately.
+   A local `.env` is ignored by Git and is not uploaded by deployment. Save and redeploy the backend.
+2. In SePay, edit the bank webhook URL to
+   `https://<your-backend-domain>/api/v1/payments/sepay/webhook` (the backend domain, not the frontend
+   or the old ngrok URL). Select incoming transfers, the matching receiving account,
+   `application/json`, HMAC-SHA256 with the exact `SEPAY_WEBHOOK_SECRET`, and enable retries.
+   Configure code recognition as `EC` + exactly 10 numeric characters if using the default prefix.
+3. On the frontend deployment, set `VITE_API_URL=https://<your-backend-domain>` without `/api/v1`,
+   then rebuild/redeploy the frontend. The Render blueprint already wires this variable between services.
+4. Create a new order on the deployed site, then simulate an incoming transfer in SePay Test mode
+   using the returned account, exact amount and `transferContent`. Confirm the webhook returns
+   HTTP 200 with `{"success":true}` and the order changes to `PAID`. Use the corresponding Live
+   configuration and linked bank account for real transfers.
+
+Troubleshooting:
+
+- HTTP 503: missing webhook secret; checkout also requires all bank/account settings.
+- HTTP 401: wrong HMAC secret, missing signature/timestamp, wrong authentication method, or timestamp
+  outside the five-minute window.
+- HTTP 404 / HTML response: wrong backend URL/path or request routed to the static frontend.
+- HTTP 400 from SePay's generic "Send test": inspect the payload; mock `id=0` is deliberately rejected.
+  Use a valid simulated transaction with a positive ID to test settlement.
+- HTTP 200 but order unchanged: inspect `/api/v1/admin/payments/webhook-events` as ADMIN for
+  unknown code, wrong account, or amount/order-state review outcomes. `code` must match the order;
+  transfer description alone is not used as a fallback. Expired/cancelled orders cannot auto-settle.
+
 ## Run
 
 ```powershell

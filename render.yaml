@@ -33,6 +33,18 @@ services:
           property: password
       - key: JWT_SIGNER_KEY
         generateValue: true
+      - key: SEPAY_WEBHOOK_SECRET
+        sync: false
+      - key: SEPAY_BANK_CODE
+        sync: false
+      - key: SEPAY_ACCOUNT_NUMBER
+        sync: false
+      - key: SEPAY_ACCOUNT_NAME
+        sync: false
+      - key: SEPAY_PAYMENT_PREFIX
+        value: EC
+      - key: SEPAY_ORDER_EXPIRY_MINUTES
+        value: "15"
       - key: MAIL_HOST
         value: smtp-relay.brevo.com
       - key: MAIL_PORT

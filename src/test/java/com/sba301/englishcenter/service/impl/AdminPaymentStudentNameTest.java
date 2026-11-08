@@ -50,13 +50,30 @@ class AdminPaymentStudentNameTest {
     }
 
     @Test
-    void orderDetailIncludesBuyerName() {
+    void orderDetailIncludesBuyerNameAndContact() {
         UUID student = UUID.randomUUID();
         var order = order(student);
         when(orders.findById(order.getOrderId())).thenReturn(Optional.of(order));
-        when(users.findById(student)).thenReturn(Optional.of(User.builder().userId(student).fullName("Nguyễn An").build()));
+        when(users.findById(student)).thenReturn(Optional.of(User.builder().userId(student).fullName("Nguyễn An")
+                .email("an@example.com").phone("0912345678").build()));
 
-        assertEquals("Nguyễn An", payments.adminOrder(order.getOrderId()).studentName());
+        var detail = payments.adminOrder(order.getOrderId());
+        assertEquals("Nguyễn An", detail.studentName());
+        assertEquals("an@example.com", detail.studentEmail());
+        assertEquals("0912345678", detail.studentPhone());
+    }
+
+    @Test
+    void orderListDoesNotExposeBuyerContact() {
+        UUID student = UUID.randomUUID();
+        var pageable = PageRequest.of(0, 10);
+        when(orders.findAll(pageable)).thenReturn(new PageImpl<>(List.of(order(student)), pageable, 1));
+        when(users.findAllById(any())).thenReturn(List.of(User.builder().userId(student).fullName("Nguyễn An")
+                .email("an@example.com").phone("0912345678").build()));
+
+        var row = payments.adminOrders(null, pageable).getData().get(0);
+        assertNull(row.studentEmail());
+        assertNull(row.studentPhone());
     }
 
     private PaymentOrder order(UUID studentId) {
