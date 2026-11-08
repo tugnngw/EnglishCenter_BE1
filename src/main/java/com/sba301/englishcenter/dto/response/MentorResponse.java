@@ -24,6 +24,10 @@ public class MentorResponse {
     String fullName;
     String phone;
     Boolean isActive;
+    UUID certificateId;
+    String certificateName;
+    BigDecimal certificateScore;
+    String scoreUnit;
     String specialization;
     String department;
     String avatarUrl;

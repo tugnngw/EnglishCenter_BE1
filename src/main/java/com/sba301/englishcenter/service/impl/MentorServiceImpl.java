@@ -105,11 +105,36 @@ public class MentorServiceImpl implements MentorService {
         }
 
         // Create mentor profile
+        String specialization = request.getSpecialization();
+        String department = request.getDepartment();
+        UUID certificateId = request.getCertificateId();
+        BigDecimal certificateScore = request.getCertificateScore();
+
+        if (certificateId != null) {
+            Certificate certificate = certificateRepository.findById(certificateId)
+                    .orElseThrow(() -> new AppException(ErrorCode.CERTIFICATE_NOT_FOUND));
+            if (specialization == null || specialization.isBlank()) {
+                specialization = certificate.getCertificateName();
+            }
+            if (department == null || department.isBlank()) {
+                department = "Bộ môn " + certificate.getCertificateName();
+            }
+        } else if (specialization != null && !specialization.isBlank()) {
+            final String spec = specialization.trim();
+            certificateId = certificateRepository.findAll().stream()
+                    .filter(c -> c.getCertificateName().equalsIgnoreCase(spec))
+                    .map(Certificate::getCertificateId)
+                    .findFirst()
+                    .orElse(null);
+        }
+
         MentorProfile profile = MentorProfile.builder()
                 .user(mentor)
                 .mentorCreatedBy(currentUserId)
-                .specialization(request.getSpecialization())
-                .department(request.getDepartment())
+                .certificateId(certificateId)
+                .certificateScore(certificateScore)
+                .specialization(specialization)
+                .department(department)
                 .avatarUrl(request.getAvatarUrl())
                 .biography(request.getBiography())
                 .hourlyRate(request.getHourlyRate())
@@ -155,8 +180,33 @@ public class MentorServiceImpl implements MentorService {
         userRepository.save(user);
 
         // Update mentor profile
-        profile.setSpecialization(request.getSpecialization());
-        profile.setDepartment(request.getDepartment());
+        if (request.getCertificateId() != null) {
+            Certificate certificate = certificateRepository.findById(request.getCertificateId())
+                    .orElseThrow(() -> new AppException(ErrorCode.CERTIFICATE_NOT_FOUND));
+            profile.setCertificateId(certificate.getCertificateId());
+            if (request.getSpecialization() == null || request.getSpecialization().isBlank()) {
+                profile.setSpecialization(certificate.getCertificateName());
+            } else {
+                profile.setSpecialization(request.getSpecialization());
+            }
+            if (request.getDepartment() != null && !request.getDepartment().isBlank()) {
+                profile.setDepartment(request.getDepartment());
+            } else if (profile.getDepartment() == null || profile.getDepartment().isBlank()) {
+                profile.setDepartment("Bộ môn " + certificate.getCertificateName());
+            }
+        } else {
+            if (request.getSpecialization() != null) {
+                profile.setSpecialization(request.getSpecialization());
+            }
+            if (request.getDepartment() != null) {
+                profile.setDepartment(request.getDepartment());
+            }
+        }
+
+        if (request.getCertificateScore() != null) {
+            profile.setCertificateScore(request.getCertificateScore());
+        }
+
         profile.setAvatarUrl(request.getAvatarUrl());
         profile.setBiography(request.getBiography());
         if (request.getHourlyRate() != null) {
@@ -371,12 +421,31 @@ public class MentorServiceImpl implements MentorService {
     }
 
     private MentorResponse toMentorResponse(User user, MentorProfile profile) {
+        UUID certId = profile.getCertificateId();
+        String certName = null;
+        String scoreUnit = null;
+
+        if (certId != null) {
+            Certificate cert = profile.getCertificate();
+            if (cert == null) {
+                cert = certificateRepository.findById(certId).orElse(null);
+            }
+            if (cert != null) {
+                certName = cert.getCertificateName();
+                scoreUnit = cert.getScoreUnit();
+            }
+        }
+
         return MentorResponse.builder()
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .phone(user.getPhone())
                 .isActive(user.getIsActive())
+                .certificateId(profile.getCertificateId())
+                .certificateName(certName != null ? certName : profile.getSpecialization())
+                .certificateScore(profile.getCertificateScore())
+                .scoreUnit(scoreUnit)
                 .specialization(profile.getSpecialization())
                 .department(profile.getDepartment())
                 .avatarUrl(profile.getAvatarUrl())
