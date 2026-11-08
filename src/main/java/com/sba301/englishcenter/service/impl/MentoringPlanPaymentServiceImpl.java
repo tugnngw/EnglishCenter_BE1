@@ -9,6 +9,8 @@ import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.repository.BookingRepository;
 import com.sba301.englishcenter.repository.MentoringPlanRepository;
+import com.sba301.englishcenter.service.CourseMentorAssignmentService;
+import com.sba301.englishcenter.service.HomeworkGraderAssignmentService;
 import com.sba301.englishcenter.service.MentoringPlanPaymentService;
 import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.service.UserService;
@@ -35,6 +37,8 @@ public class MentoringPlanPaymentServiceImpl implements MentoringPlanPaymentServ
     private final BookingRepository bookingRepository;
     private final NotificationService notificationService;
     private final UserService userService;
+    private final CourseMentorAssignmentService courseMentorAssignment;
+    private final HomeworkGraderAssignmentService graderAssignment;
 
     @Override
     @Transactional
@@ -61,6 +65,26 @@ public class MentoringPlanPaymentServiceImpl implements MentoringPlanPaymentServ
             }
         }
         log.info("Mentoring plan {} activated after SePay payment", planId);
+
+        // Học viên đã mua mentor 1-1 → mentor được thêm vào các khóa học học viên đang học
+        // (khóa học tạo ra không có mentor sẵn) → mentor chấm bài tập của học viên trong khóa đó.
+        int assignedCourses = courseMentorAssignment.assignMentorToStudentCourses(
+                plan.getStudentId(), plan.getMentorId());
+        if (assignedCourses > 0) {
+            log.info("Assigned mentor {} to {} course(s) of student {}",
+                    plan.getMentorId(), assignedCourses, plan.getStudentId());
+        }
+
+        // Học viên có thể đã nộp bài TRƯỚC khi mua gói → lúc nộp chưa có mentor,
+        // bài bị gán null (AI chấm). Gán lại mentor cho các bài CHƯA CHẤM để
+        // mentor thấy và chấm tay.
+        int backfilled = graderAssignment.backfillUngradedSubmissions(
+                plan.getStudentId(), plan.getMentorId());
+        if (backfilled > 0) {
+            log.info("Assigned mentor {} to {} pending submission(s) of student {} "
+                    + "(student bought the plan after submitting)",
+                    plan.getMentorId(), backfilled, plan.getStudentId());
+        }
 
         String studentName = userService.getUserById(plan.getStudentId()).getFullName();
         String mentorName = userService.getUserById(plan.getMentorId()).getFullName();

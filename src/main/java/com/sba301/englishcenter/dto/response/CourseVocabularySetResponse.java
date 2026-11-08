@@ -51,4 +51,10 @@ public class CourseVocabularySetResponse {
      * (không trả về danh sách từ).
      */
     Boolean locked;
+
+    /**
+     * true = bộ từ vựng này được admin đánh dấu "xem thử" (nội dung 'vocabulary'
+     * có {@code isPreview = true}) → học viên CHƯA ghi danh vẫn xem được danh sách từ.
+     */
+    Boolean isPreview;
 }

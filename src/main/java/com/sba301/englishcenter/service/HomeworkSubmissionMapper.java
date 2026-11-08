@@ -64,6 +64,8 @@ public final class HomeworkSubmissionMapper {
                 .fileFormat(submission.getFileFormat())
                 .fileBytes(submission.getFileBytes())
                 .fileOriginalName(submission.getFileOriginalName())
+                .gradedByType(submission.getGradedByType())
+                .assignedGraderId(submission.getAssignedGraderId())
                 .gradeHistory(history)
                 .build();
     }
@@ -90,6 +92,7 @@ public final class HomeworkSubmissionMapper {
                 .passed(h.getPassed())
                 .feedback(h.getFeedback())
                 .gradedAt(h.getGradedAt())
+                .gradedByType(h.getGradedByType())
                 .build();
     }
 

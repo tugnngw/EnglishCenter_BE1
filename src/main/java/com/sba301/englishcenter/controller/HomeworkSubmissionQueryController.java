@@ -2,7 +2,9 @@ package com.sba301.englishcenter.controller;
 
 import com.sba301.englishcenter.common.ApiResponse;
 import com.sba301.englishcenter.common.PageResponse;
+import com.sba301.englishcenter.dto.response.HomeworkExamStatsResponse;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
+import com.sba301.englishcenter.service.HomeworkExamStatsService;
 import com.sba301.englishcenter.service.HomeworkQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -34,6 +36,7 @@ import java.util.UUID;
 public class HomeworkSubmissionQueryController {
 
     private final HomeworkQueryService queryService;
+    private final HomeworkExamStatsService statsService;
 
     /* ============================================
      * STUDENT
@@ -54,10 +57,10 @@ public class HomeworkSubmissionQueryController {
      * ============================================ */
 
     @GetMapping("/api/v1/mentor/homework-submissions")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MENTOR')")
+    @PreAuthorize("hasRole('MENTOR')")
     @Operation(summary = "Grading queue",
-            description = "Homework submissions of the courses this mentor teaches. "
-                    + "pendingOnly=true → only ungraded submissions")
+            description = "Homework submissions assigned to this mentor (student bought the 1-1 mentor plan) "
+                    + "+ unassigned ones of their courses as AI-grading fallback. pendingOnly=true \u2192 only ungraded")
     public PageResponse<HomeworkSubmissionResponse> getQueue(
             @RequestParam(defaultValue = "true") boolean pendingOnly,
             @PageableDefault(size = 20, sort = "submittedDate", direction = Sort.Direction.DESC) Pageable pageable) {
@@ -65,10 +68,20 @@ public class HomeworkSubmissionQueryController {
     }
 
     @GetMapping("/api/v1/mentor/homework-submissions/{submissionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MENTOR')")
+    @PreAuthorize("hasRole('MENTOR')")
     @Operation(summary = "Submission detail for grading",
-            description = "Full submission incl. grade history. Mentors only see their own courses.")
+            description = "Full submission incl. grade history + rubric. Mentors only see their own students.")
     public ApiResponse<HomeworkSubmissionResponse> getForGrading(@PathVariable UUID submissionId) {
         return ApiResponse.success(queryService.getForGrading(submissionId));
+    }
+
+    @GetMapping("/api/v1/mentor/homework/{homeworkContentId}/stats")
+    @PreAuthorize("hasRole('MENTOR')")
+    @Operation(summary = "Multiple-choice homework stats",
+            description = "Bảng thống kê kết quả làm bài TRẮC NGHIỆM (Nhóm A): hệ thống tự chấm, "
+                    + "mentor chỉ xem để nắm điểm yếu chung của học viên.")
+    public ApiResponse<HomeworkExamStatsResponse> getExamStats(
+            @PathVariable UUID homeworkContentId) {
+        return ApiResponse.success("Thống kê kết quả làm bài", statsService.getStats(homeworkContentId));
     }
 }

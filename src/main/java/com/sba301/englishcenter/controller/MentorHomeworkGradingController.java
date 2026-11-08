@@ -2,8 +2,10 @@ package com.sba301.englishcenter.controller;
 
 import com.sba301.englishcenter.common.ApiResponse;
 import com.sba301.englishcenter.dto.request.GradeHomeworkSubmissionRequest;
+import com.sba301.englishcenter.dto.response.HomeworkAiSuggestionResponse;
 import com.sba301.englishcenter.dto.response.HomeworkGradeHistoryResponse;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
+import com.sba301.englishcenter.service.HomeworkAiSuggestionService;
 import com.sba301.englishcenter.service.HomeworkGradingService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -21,18 +23,21 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Mentor/Admin chấm bài tập (tự luận + nộp file).
+ * Mentor chấm bài tập (tự luận + nộp file).
  * <p>
  * Bài trắc nghiệm được chấm tự động lúc học viên nộp → không có trong đây.
+ * <p>
+ * Admin KHÔNG chấm bài tập — admin chỉ tạo nội dung (nên endpoint này chỉ MENTOR).
  */
 @RestController
 @RequestMapping("/api/v1/mentor/homework-submissions")
 @RequiredArgsConstructor
-@PreAuthorize("hasAnyRole('ADMIN', 'MENTOR')")
+@PreAuthorize("hasRole('MENTOR')")
 @Tag(name = "Mentor - Homework grading", description = "Grade homework submissions (written / file)")
 public class MentorHomeworkGradingController {
 
     private final HomeworkGradingService gradingService;
+    private final HomeworkAiSuggestionService aiSuggestionService;
 
     @PutMapping("/{submissionId}/grade")
     @Operation(summary = "Grade a homework submission",
@@ -49,5 +54,13 @@ public class MentorHomeworkGradingController {
             description = "History of score changes: who graded, old score, new score, time")
     public ApiResponse<List<HomeworkGradeHistoryResponse>> getHistory(@PathVariable UUID submissionId) {
         return ApiResponse.success(gradingService.getHistory(submissionId));
+    }
+
+    @GetMapping("/{submissionId}/ai-suggestion")
+    @Operation(summary = "AI grading suggestion for mentor",
+            description = "Gợi ý chấm từ AI để mentor tham khảo — AI KHÔNG ghi điểm vào hệ thống, "
+                    + "mentor vẫn là người quyết định điểm chính thức.")
+    public ApiResponse<HomeworkAiSuggestionResponse> getAiSuggestion(@PathVariable UUID submissionId) {
+        return ApiResponse.success("Gợi ý chấm từ AI", aiSuggestionService.suggest(submissionId));
     }
 }

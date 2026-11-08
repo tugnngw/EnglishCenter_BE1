@@ -94,6 +94,15 @@ public class HomeworkExamService {
      */
     @Transactional(readOnly = true)
     public AttemptDetailResponse getAttempt(UUID attemptId) {
+        UUID studentId = SecurityUtils.getCurrentUserId()
+                .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
+        ExamAttempt attempt = examAttemptRepository.findById(attemptId)
+                .orElseThrow(() -> new AppException(ErrorCode.ATTEMPT_NOT_FOUND));
+        CourseContent homework = findHomeworkOf(attempt);
+        if (homework != null
+                && !enrollments.isEnrolled(studentId, homework.getCourse().getCourseId())) {
+            throw new AppException(ErrorCode.ENROLLMENT_REQUIRED);
+        }
         return examAttemptService.getAttempt(attemptId);
     }
 
@@ -133,6 +142,11 @@ public class HomeworkExamService {
         if (homework == null) {
             throw new AppException(ErrorCode.COURSE_CONTENT_NOT_FOUND,
                     "Không tìm thấy bài tập ứng với lượt thi này");
+        }
+
+        // Chặn tạo bài nộp cho người CHƯA ghi danh khóa học (học thử).
+        if (!enrollments.isEnrolled(studentId, homework.getCourse().getCourseId())) {
+            throw new AppException(ErrorCode.ENROLLMENT_REQUIRED);
         }
 
         // Đã nộp bài bài tập cho lượt thi này rồi → trả về bản ghi cũ.

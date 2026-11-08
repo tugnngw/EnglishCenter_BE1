@@ -263,25 +263,16 @@ public class AdminController {
     }
 
     // ============================================
-    // HOMEWORK SUBMISSIONS — grading  (Dev 2)
-    // Overridden to also allow MENTOR per task requirement
+    // HOMEWORK SUBMISSIONS — tra cứu (Dev 2)
+    // Chấm bài là việc của MENTOR, admin không chấm.
+    // Endpoint chấm: /api/v1/mentor/homework-submissions/{id}/grade
     // ============================================
 
     @GetMapping("/homework-submissions/{submissionId}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MENTOR')")
+    @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Get submission detail",
-            description = "Retrieve a single submission for grading review")
+            description = "Retrieve a single submission for lookup. Grading is done by mentors only.")
     public ApiResponse<HomeworkSubmissionResponse> getSubmission(@PathVariable UUID submissionId) {
         return ApiResponse.success(submissionService.getSubmissionById(submissionId));
-    }
-
-    @PutMapping("/homework-submissions/{submissionId}/grade")
-    @PreAuthorize("hasAnyRole('ADMIN', 'MENTOR')")
-    @Operation(summary = "Grade submission",
-            description = "Assign score and feedback to a homework submission")
-    public ApiResponse<HomeworkSubmissionResponse> gradeSubmission(
-            @PathVariable UUID submissionId,
-            @Valid @RequestBody GradeHomeworkSubmissionRequest request) {
-        return ApiResponse.success(submissionService.gradeSubmission(submissionId, request));
     }
 }

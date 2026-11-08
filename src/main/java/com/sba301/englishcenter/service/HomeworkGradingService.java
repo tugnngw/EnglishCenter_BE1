@@ -1,7 +1,11 @@
 package com.sba301.englishcenter.service;
 
 import com.sba301.englishcenter.common.enums.ContentType;
+import com.sba301.englishcenter.common.enums.HomeworkGraderType;
+import com.sba301.englishcenter.common.enums.MentoringPlanStatus;
+import com.sba301.englishcenter.common.enums.NotificationType;
 import com.sba301.englishcenter.dto.request.GradeHomeworkSubmissionRequest;
+import com.sba301.englishcenter.dto.request.RubricScoreInput;
 import com.sba301.englishcenter.dto.response.HomeworkGradeHistoryResponse;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
 import com.sba301.englishcenter.entity.Course;
@@ -13,6 +17,7 @@ import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.repository.HomeworkGradeHistoryRepository;
 import com.sba301.englishcenter.repository.HomeworkSubmissionRepository;
+import com.sba301.englishcenter.repository.MentoringPlanRepository;
 import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.security.UserPrincipal;
@@ -25,7 +30,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -47,7 +54,9 @@ public class HomeworkGradingService {
     private final HomeworkSubmissionRepository submissionRepository;
     private final HomeworkGradeHistoryRepository historyRepository;
     private final UserRepository userRepository;
+    private final MentoringPlanRepository planRepository;
     private final CloudinaryService cloudinary;
+    private final NotificationService notificationService;
 
     /**
      * Mentor chấm / sửa điểm một bài nộp.
@@ -65,7 +74,7 @@ public class HomeworkGradingService {
             throw new AppException(ErrorCode.COURSE_CONTENT_INVALID_TYPE,
                     "Bài nộp không thuộc nội dung bài tập");
         }
-        assertCanGrade(homework.getCourse(), principal);
+        assertCanGrade(submission, principal);
 
         BigDecimal maxScore = resolveMaxScore(homework);
         BigDecimal score = request.getScore().setScale(2, RoundingMode.HALF_UP);
@@ -73,6 +82,9 @@ public class HomeworkGradingService {
             throw new AppException(ErrorCode.HOMEWORK_GRADE_OUT_OF_RANGE,
                     "Điểm tối đa của bài tập là " + maxScore.stripTrailingZeros().toPlainString());
         }
+
+        // Điểm + nhận xét 1-1 theo từng tiêu chí rubric (nếu mentor gửi kèm).
+        String rubricScoresJson = serializeRubricScores(request.getRubricScores());
 
         BigDecimal oldScore = submission.getScore();
         Boolean oldPassed = submission.getPassed();
@@ -82,6 +94,11 @@ public class HomeworkGradingService {
         submission.setGradedDate(LocalDateTime.now());
         Boolean passed = resolvePassed(homework, score);
         submission.setPassed(passed);
+        // Mentor chấm tay → ghi rõ ai chấm (AI hay mentor).
+        submission.setGradedByType(HomeworkGraderType.mentor.name());
+        if (rubricScoresJson != null) {
+            submission.setRubricScores(rubricScoresJson);
+        }
         submission = submissionRepository.save(submission);
 
         // Lịch sử: chỉ ghi khi có thay đổi thực sự (điểm hoặc kết quả đạt).
@@ -90,6 +107,8 @@ public class HomeworkGradingService {
             historyRepository.save(HomeworkGradeHistory.builder()
                     .submission(submission)
                     .gradedBy(grader)
+                    .gradedByType(HomeworkGraderType.mentor.name())
+                    .rubricScores(rubricScoresJson)
                     .oldScore(oldScore)
                     .newScore(score)
                     .passed(passed)
@@ -101,7 +120,34 @@ public class HomeworkGradingService {
         log.info("Mentor {} chấm bài nộp {}: {} -> {} điểm, passed={}",
                 principal.getUserId(), submissionId, oldScore, score, passed);
 
+        notifyStudent(submission, homework, score, passed, principal);
+
         return HomeworkSubmissionMapper.toResponse(submission, buildFileUrl(submission), null);
+    }
+
+    /**
+     * Báo học viên biết bài đã được chấm.
+     */
+    private void notifyStudent(HomeworkSubmission submission, CourseContent homework,
+                               BigDecimal score, Boolean passed, UserPrincipal grader) {
+        User student = submission.getStudent();
+        if (student == null || student.getUserId() == null) {
+            return;
+        }
+        BigDecimal maxScore = resolveMaxScore(homework);
+        User graderUser = userRepository.findById(grader.getUserId()).orElse(null);
+        String graderName = graderUser != null && graderUser.getFullName() != null
+                ? graderUser.getFullName()
+                : (grader.getRoleName() != null && "ADMIN".equalsIgnoreCase(grader.getRoleName())
+                        ? "Admin" : "Mentor");
+        String title = passed != null && passed ? "Bài tập đã đạt" : "Bài tập đã được chấm";
+        String message = graderName + " đã chấm bài \""
+                + (homework.getTitle() == null ? "Bài tập" : homework.getTitle())
+                + "\" — điểm " + score.stripTrailingZeros().toPlainString()
+                + (maxScore != null
+                        ? "/" + maxScore.stripTrailingZeros().toPlainString() : "")
+                + ". Vào khóa học để xem nhận xét.";
+        notificationService.notify(student.getUserId(), NotificationType.homework_deadline, title, message);
     }
 
     /**
@@ -130,8 +176,7 @@ public class HomeworkGradingService {
 
         UserPrincipal principal = SecurityUtils.getCurrentUserPrincipal()
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
-        assertCanGrade(submission.getHomeworkContent() != null
-                ? submission.getHomeworkContent().getCourse() : null, principal);
+        assertCanGrade(submission, principal);
 
         return historyRepository.findBySubmission_SubmissionIdOrderByGradedAtDesc(submissionId).stream()
                 .map(h -> HomeworkGradeHistoryResponse.builder()
@@ -143,23 +188,86 @@ public class HomeworkGradingService {
                         .passed(h.getPassed())
                         .feedback(h.getFeedback())
                         .gradedAt(h.getGradedAt())
+                        .gradedByType(h.getGradedByType())
                         .build())
                 .toList();
     }
 
     /**
-     * Admin chấm mọi bài; mentor chỉ chấm bài của khóa học mình phụ trách.
+     * Quyền chấm bài:
+     * <ul>
+     *   <li>Mentor được GIAO chấm bài này (mentor 1-1 của học viên, snapshot lúc nộp)
+     *       → chấm được;</li>
+     *   <li>Mentor phụ trách khóa học (course.mentor) → chấm được bài của khóa đó;</li>
+     *   <li>Mentor đang dạy kèm 1-1 cho học viên (gói mentoring_plans còn hiệu lực)
+     *       → chấm được bài của học viên đó.</li>
+     * </ul>
+     * Admin KHÔNG tham gia chấm bài tập.
      */
-    public void assertCanGrade(Course course, UserPrincipal principal) {
-        if ("ADMIN".equalsIgnoreCase(principal.getRoleName())) {
+    public void assertCanGrade(HomeworkSubmission submission, UserPrincipal principal) {
+        if (!"MENTOR".equalsIgnoreCase(principal.getRoleName())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        UUID mentorId = principal.getUserId();
+
+        // 1) Mentor được giao chấm chính bài này (ưu tiên cao nhất).
+        if (submission != null && mentorId.equals(submission.getAssignedGraderId())) {
             return;
         }
-        boolean isCourseMentor = "MENTOR".equalsIgnoreCase(principal.getRoleName())
-                && course != null
-                && course.getMentor() != null
-                && course.getMentor().getUserId().equals(principal.getUserId());
-        if (!isCourseMentor) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
+        CourseContent homework = submission != null ? submission.getHomeworkContent() : null;
+        Course course = homework != null ? homework.getCourse() : null;
+
+        // 2) Mentor phụ trách khóa học.
+        if (course != null && course.getMentor() != null
+                && mentorId.equals(course.getMentor().getUserId())) {
+            return;
+        }
+        // 3) Mentor dạy kèm 1-1 cho học viên này.
+        UUID studentId = submission != null && submission.getStudent() != null
+                ? submission.getStudent().getUserId() : null;
+        if (studentId != null && planRepository.existsByMentorIdAndStudentIdAndStatusIn(
+                mentorId, studentId, MENTOR_PLAN_STATUSES)) {
+            return;
+        }
+        throw new AppException(ErrorCode.UNAUTHORIZED);
+    }
+
+    /**
+     * Trạng thái gói kèm 1-1 ĐÃ THANH TOÁN → mentor được phép chấm bài của học viên.
+     * <p>
+     * CHỈ gói đã trả tiền ({@code active} / {@code completed}). Gói {@code pending_payment}
+     * chưa được tính vì học viên chưa thực sự mua.
+     */
+    private static final List<MentoringPlanStatus> MENTOR_PLAN_STATUSES =
+            List.of(MentoringPlanStatus.active, MentoringPlanStatus.completed);
+
+    /**
+     * Chuyển danh sách điểm rubric của mentor thành JSON để lưu JSONB.
+     * <p>
+     * Rỗng / null → {@code null} (không ghi đè dữ liệu cũ).
+     */
+    private String serializeRubricScores(List<RubricScoreInput> rubricScores) {
+        if (rubricScores == null || rubricScores.isEmpty()) {
+            return null;
+        }
+        List<Map<String, Object>> payload = rubricScores.stream()
+                .filter(r -> r != null && r.getCriterion() != null && !r.getCriterion().isBlank())
+                .map(r -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("criterion", r.getCriterion().trim());
+                    item.put("score", r.getScore());
+                    item.put("comment", r.getComment());
+                    return item;
+                })
+                .toList();
+        if (payload.isEmpty()) {
+            return null;
+        }
+        try {
+            return JsonUtil.toJson(payload);
+        } catch (Exception ex) {
+            log.warn("Không lưu được điểm rubric: {}", ex.getMessage());
+            return null;
         }
     }
 

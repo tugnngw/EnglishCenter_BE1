@@ -1,6 +1,7 @@
 package com.sba301.englishcenter.util;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sba301.englishcenter.entity.Certificate;
 import com.sba301.englishcenter.entity.CertificatePart;
@@ -10,6 +11,8 @@ import com.sba301.englishcenter.exception.ErrorCode;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -35,8 +38,15 @@ public final class CourseRules {
     public static final String TYPE_TEXT = "text";
     public static final String TYPE_FILE = "file";
     public static final String TYPE_MULTIPLE_CHOICE = "multiple_choice";
-    /** Hình thức nộp được phép khi tạo mới: PDF hoặc trắc nghiệm. `text` chỉ giữ cho dữ liệu cũ. */
-    public static final Set<String> NEW_HOMEWORK_TYPES = Set.of(TYPE_FILE, TYPE_MULTIPLE_CHOICE);
+    /** Ghi âm / nộp file âm thanh (bài tập Speaking). */
+    public static final String TYPE_AUDIO = "audio";
+    /** Hình thức nộp được phép: file, trắc nghiệm, ghi âm, nhập văn bản. */
+    public static final Set<String> NEW_HOMEWORK_TYPES =
+            Set.of(TYPE_FILE, TYPE_MULTIPLE_CHOICE, TYPE_AUDIO, TYPE_TEXT);
+
+    /** Định dạng file âm thanh được phép cho bài tập ghi âm. */
+    public static final Set<String> AUDIO_FILE_TYPES =
+            Set.of("mp3", "wav", "m4a", "aac", "ogg", "webm", "mp4", "mov");
 
     private static final BigDecimal MAX_HOMEWORK_SCORE = new BigDecimal("1000");
     private static final int MAX_HOMEWORK_ATTEMPTS = 100;
@@ -194,13 +204,23 @@ public final class CourseRules {
         String type = data.hasNonNull("submissionType")
                 ? data.get("submissionType").asText().trim().toLowerCase()
                 : TYPE_FILE;
-        String previousType = readSubmissionType(previousData);
-        boolean keepLegacyText = TYPE_TEXT.equals(type) && TYPE_TEXT.equals(previousType);
-        if (!NEW_HOMEWORK_TYPES.contains(type) && !keepLegacyText) {
+        if (!NEW_HOMEWORK_TYPES.contains(type)) {
             throw new AppException(ErrorCode.VALIDATION_ERROR,
-                    "Hình thức nộp chỉ nhận: file (PDF) hoặc multiple_choice (trắc nghiệm)");
+                    "Hình thức nộp chỉ nhận: file (PDF), audio (ghi âm), text (nhập văn bản) "
+                            + "hoặc multiple_choice (trắc nghiệm)");
         }
         data.put("submissionType", type);
+
+        // ---- Bài ghi âm: định dạng file âm thanh + giới hạn riêng
+        if (TYPE_AUDIO.equals(type)) {
+            // Bài ghi âm không dùng điểm tối đa/rubric kiểu file thường → vẫn cho phép.
+            // Định dạng: nếu Admin không cấu hình → dùng danh sách audio mặc định.
+            if (!data.has("allowedFileTypes")) {
+                ArrayNode defaults = JsonUtil.mapper().createArrayNode();
+                AUDIO_FILE_TYPES.stream().sorted().forEach(defaults::add);
+                data.set("allowedFileTypes", defaults);
+            }
+        }
 
         // ---- Hướng dẫn
         if (data.hasNonNull("instructions") && data.get("instructions").asText().length() > MAX_INSTRUCTIONS_LENGTH) {
@@ -249,9 +269,52 @@ public final class CourseRules {
                     "Số lần làm tối đa phải là số nguyên từ 0 đến " + MAX_HOMEWORK_ATTEMPTS);
         }
 
+        // ---- Định dạng file được phép nộp (Admin cấu hình) ----
+        // Chuẩn hoá về mảng đuôi file (không dấu chấm, chữ thường, không trùng lặp).
+        if (data.has("allowedFileTypes")) {
+            JsonNode allowed = data.get("allowedFileTypes");
+            List<String> extensions = new ArrayList<>();
+            if (allowed.isArray()) {
+                for (JsonNode item : allowed) {
+                    if (item.isTextual()) {
+                        addFileExtension(extensions, item.textValue());
+                    }
+                }
+            } else if (allowed.isTextual()) {
+                for (String part : allowed.textValue().split(",")) {
+                    addFileExtension(extensions, part);
+                }
+            }
+            if (extensions.isEmpty()) {
+                data.remove("allowedFileTypes");
+            } else {
+                ArrayNode normalized = JsonUtil.mapper().createArrayNode();
+                extensions.forEach(normalized::add);
+                data.set("allowedFileTypes", normalized);
+            }
+        }
+
         // `timeLimitMinutes` không được nơi nào dùng (thời gian làm bài lấy theo đề thi) → bỏ.
         data.remove("timeLimitMinutes");
         return data.toString();
+    }
+
+    /** Chuẩn hoá 1 đuôi file: bỏ dấu chấm đầu, hạ chữ thường, bỏ rỗng, không trùng lặp. */
+    private static void addFileExtension(List<String> target, String raw) {
+        if (raw == null) {
+            return;
+        }
+        String clean = raw.trim().toLowerCase();
+        while (clean.startsWith(".")) {
+            clean = clean.substring(1);
+        }
+        // Chỉ nhận chữ + số (pdf, docx, xlsx...).
+        if (clean.isEmpty() || !clean.matches("[a-z0-9]+")) {
+            return;
+        }
+        if (!target.contains(clean)) {
+            target.add(clean);
+        }
     }
 
     // =====================================================================

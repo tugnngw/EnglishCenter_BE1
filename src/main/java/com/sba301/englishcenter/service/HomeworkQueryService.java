@@ -2,6 +2,7 @@ package com.sba301.englishcenter.service;
 
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.ContentType;
+import com.sba301.englishcenter.common.enums.MentoringPlanStatus;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
 import com.sba301.englishcenter.entity.Course;
 import com.sba301.englishcenter.entity.CourseContent;
@@ -35,10 +36,22 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class HomeworkQueryService {
 
+    /**
+     * Trạng thái gói kèm 1-1 ĐÃ THANH TOÁN → mentor đó được phép chấm bài tập
+     * của học viên (dùng cho khóa học KHÔNG gán mentor).
+     * <p>
+     * CHỈ gói đã trả tiền ({@code active} / {@code completed}). Gói {@code pending_payment}
+     * (đã bấm thanh toán, SePay chưa xác nhận) không được tính ở đây để tránh
+     * mentor chưa thu tiền nhận bài của học viên đã trả tiền cho mentor khác.
+     */
+    private static final List<MentoringPlanStatus> MENTOR_PLAN_STATUSES =
+            List.of(MentoringPlanStatus.active, MentoringPlanStatus.completed);
+
     private final HomeworkSubmissionRepository submissionRepository;
     private final CourseContentRepository courseContentRepository;
     private final HomeworkGradeHistoryRepository historyRepository;
     private final CloudinaryService cloudinary;
+    private final HomeworkGradingService gradingService;
 
     /**
      * Dựng URL có thời hạn cho file bài nộp (nếu có).
@@ -89,26 +102,32 @@ public class HomeworkQueryService {
     }
 
     /**
-     * Hàng đợi chấm của mentor: các bài nộp CHƯA chấm trong khóa học mình dạy.
-     * <p>
-     * Admin thấy tất cả các bài nộp (kể cả đã chấm — để tra cứu).
+     * Hàng đợi chấm của mentor:
+     * <ul>
+     *   <li>Bài được GIAO cho mentor này ({@code assigned_grader_id}) — học viên đã mua
+     *       gói mentor 1-1 của mentor này → mentor đó chấm;</li>
+     *   <li>Bài CHƯA gán ai của khóa học mentor phụ trách, hoặc của học viên mentor
+     *       đang dạy kèm 1-1 → bình thường AI chấm, nhưng nếu AI lỗi thì mentor
+     *       chấm tay được (fallback).</li>
+     * </ul>
+     * Admin KHÔNG chấm bài tập → không có nhánh admin ở đây.
      */
     @Transactional(readOnly = true)
     public PageResponse<HomeworkSubmissionResponse> getMentorQueue(Pageable pageable, boolean pendingOnly) {
         UserPrincipal principal = SecurityUtils.getCurrentUserPrincipal()
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
 
-        Page<HomeworkSubmission> page;
-        if ("ADMIN".equalsIgnoreCase(principal.getRoleName())) {
-            page = pendingOnly
-                    ? submissionRepository.findPendingGrading(pageable)
-                    : submissionRepository.findAll(pageable);
-        } else {
-            UUID mentorId = principal.getUserId();
-            page = pendingOnly
-                    ? submissionRepository.findPendingGradingForMentor(mentorId, pageable)
-                    : submissionRepository.findAllForMentor(mentorId, pageable);
+        // Chỉ MENTOR vào được màn hình chấm bài (admin chỉ tạo nội dung).
+        if (!"MENTOR".equalsIgnoreCase(principal.getRoleName())) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
         }
+
+        UUID mentorId = principal.getUserId();
+        Page<HomeworkSubmission> page = pendingOnly
+                ? submissionRepository.findPendingGradingForMentorWithStudents(
+                        mentorId, MENTOR_PLAN_STATUSES, pageable)
+                : submissionRepository.findAllForMentorWithStudents(
+                        mentorId, MENTOR_PLAN_STATUSES, pageable);
 
         return PageResponse.<HomeworkSubmissionResponse>builder()
                 .currentPage(page.getNumber())
@@ -116,13 +135,31 @@ public class HomeworkQueryService {
                 .totalPages(page.getTotalPages())
                 .totalElements(page.getTotalElements())
                 .data(page.getContent().stream()
+                        .filter(s -> !isAutoGraded(s))
                         .map(s -> HomeworkSubmissionMapper.toResponse(s, buildFileUrl(s), null))
                         .toList())
                 .build();
     }
 
     /**
-     * Chi tiết bài nộp cho mentor (kèm lịch sử chấm).
+     * Bài này do hệ thống tự chấm (Nhóm A — trắc nghiệm) → mentor KHÔNG chấm tay.
+     * <p>
+     * Bài trắc nghiệm: hệ thống tự chấm, mentor chỉ xem bảng thống kê.
+     * Bài đã AI chấm xong: cũng không vào hàng đợi chấm tay.
+     */
+    private boolean isAutoGraded(HomeworkSubmission submission) {
+        if (submission == null) {
+            return false;
+        }
+        if ("multiple_choice".equalsIgnoreCase(submission.getSubmissionType())) {
+            return true;
+        }
+        return submission.getGradedDate() != null
+                && "ai".equalsIgnoreCase(submission.getGradedByType());
+    }
+
+    /**
+     * Chi tiết bài nộp cho mentor (kèm lịch sử chấm + rubric chấm điểm).
      */
     @Transactional(readOnly = true)
     public HomeworkSubmissionResponse getForGrading(UUID submissionId) {
@@ -136,19 +173,21 @@ public class HomeworkQueryService {
             throw new AppException(ErrorCode.COURSE_CONTENT_INVALID_TYPE,
                     "Bài nộp không thuộc nội dung bài tập");
         }
-        Course course = homework.getCourse();
-        boolean isCourseMentor = "MENTOR".equalsIgnoreCase(principal.getRoleName())
-                && course != null
-                && course.getMentor() != null
-                && course.getMentor().getUserId().equals(principal.getUserId());
-        if (!"ADMIN".equalsIgnoreCase(principal.getRoleName()) && !isCourseMentor) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
-        }
+        // Chỉ MENTOR được chấm: mentor của khóa học, hoặc mentor dạy kèm 1-1 học viên.
+        gradingService.assertCanGrade(submission, principal);
 
         List<com.sba301.englishcenter.dto.response.HomeworkGradeHistoryResponse> history =
                 historyRepository.findBySubmission_SubmissionIdOrderByGradedAtDesc(submissionId).stream()
                         .map(HomeworkSubmissionMapper::toHistoryResponse)
                         .toList();
-        return HomeworkSubmissionMapper.toResponse(submission, buildFileUrl(submission), history);
+        HomeworkSubmissionResponse response =
+                HomeworkSubmissionMapper.toResponse(submission, buildFileUrl(submission), history);
+
+        // Bổ sung thông tin cho giao diện chấm song song: rubric, thang điểm.
+        response.setRubric(HomeworkContentData.readRubric(homework.getContentData()));
+        response.setMaxScore(gradingService.resolveMaxScore(homework));
+        response.setPassingScore(HomeworkContentData.readNumber(homework.getContentData(), "passingScore"));
+        response.setAutoGraded(isAutoGraded(submission));
+        return response;
     }
 }

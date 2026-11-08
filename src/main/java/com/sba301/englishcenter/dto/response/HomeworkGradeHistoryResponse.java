@@ -39,4 +39,11 @@ public class HomeworkGradeHistoryResponse {
     String feedback;
 
     LocalDateTime gradedAt;
+
+    /**
+     * Ai thực hiện lần chấm này: {@code ai} | {@code mentor}.
+     * <p>
+     * null = chưa chấm. Thêm ở V23.
+     */
+    String gradedByType;
 }

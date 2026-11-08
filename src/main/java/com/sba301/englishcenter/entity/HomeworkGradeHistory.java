@@ -15,6 +15,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnTransformer;
 import lombok.experimental.FieldDefaults;
 
 import java.math.BigDecimal;
@@ -68,4 +69,21 @@ public class HomeworkGradeHistory {
 
     @Column(name = "graded_at")
     private LocalDateTime gradedAt;
+
+    /**
+     * Ai thực hiện lần chấm/sửa điểm này: {@code ai} | {@code mentor}.
+     * <p>
+     * NULL = chưa chấm. Thêm ở V23.
+     */
+    @Column(name = "graded_by_type", length = 20)
+    private String gradedByType;
+
+    /**
+     * Snapshot rubric điểm tại lần chấm này (JSONB).
+     * <p>
+     * Thêm ở V24.
+     */
+    @Column(name = "rubric_scores", columnDefinition = "jsonb")
+    @ColumnTransformer(write = "cast(? as jsonb)")
+    private String rubricScores;
 }

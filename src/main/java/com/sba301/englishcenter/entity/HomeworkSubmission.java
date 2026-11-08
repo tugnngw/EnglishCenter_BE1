@@ -14,6 +14,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -107,4 +108,40 @@ public class HomeworkSubmission {
 
     @Column(name = "file_original_name", length = 255)
     private String fileOriginalName;
+
+    /* =====================================================
+     * Cột bổ sung (V23) — ai chấm bài này.
+     * ===================================================== */
+
+    /**
+     * Ai chấm bài này: {@code ai} (AI tự chấm) | {@code mentor} (mentor chấm tay).
+     * <p>
+     * NULL = chưa chấm (đang chờ). Quy tắc:
+     * <ul>
+     *   <li>Học viên KHÔNG mua mentor → AI chấm tự động lúc nộp;</li>
+     *   <li>Học viên ĐÃ mua gói 1-1 → mentor đó chấm tay.</li>
+     * </ul>
+     */
+    @Column(name = "graded_by_type", length = 20)
+    private String gradedByType;
+
+    /**
+     * Mentor được giao chấm bài này (mentor 1-1 của học viên).
+     * <p>
+     * NULL = học viên không có mentor nào → AI chấm tự động.
+     * Gán lúc nộp bài (snapshot), không phụ thuộc khóa học có mentor hay không.
+     */
+    @Column(name = "assigned_grader_id")
+    private UUID assignedGraderId;
+
+    /**
+     * Điểm + nhận xét 1-1 theo từng tiêu chí rubric mà mentor chấm.
+     * <p>
+     * JSONB array: {@code [{"criterion":"...","score":6.5,"comment":"..."}]}.
+     * NULL = chấm không theo rubric (bài tập không cấu hình rubric).
+     * Thêm ở V24.
+     */
+    @Column(name = "rubric_scores", columnDefinition = "jsonb")
+    @ColumnTransformer(write = "cast(? as jsonb)")
+    private String rubricScores;
 }

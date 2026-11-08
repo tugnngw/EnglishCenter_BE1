@@ -75,6 +75,39 @@ public class HomeworkSubmissionResponse {
      */
     String fileUrl;
 
+    /**
+     * Ai chấm bài này: {@code ai} (AI tự chấm) | {@code mentor} (mentor chấm tay).
+     * <p>
+     * null = chưa chấm. Bài trắc nghiệm tự chấm từ lượt thi nên không có giá trị này.
+     */
+    String gradedByType;
+
+    /** Mentor được giao chấm bài này (null = học viên không mua mentor → AI chấm). */
+    UUID assignedGraderId;
+
     /** Lịch sử chấm (mới nhất trước) — chỉ mentor/admin được thấy. */
     List<HomeworkGradeHistoryResponse> gradeHistory;
+
+    /**
+     * Rubric chấm điểm của bài tập (Admin cấu hình trong {@code content_data.rubric}).
+     * <p>
+     * Mentor dùng để chấm 1-1: mỗi tiêu chí có 1 ô điểm + 1 khung nhận xét.
+     */
+    List<HomeworkRubricCriterion> rubric;
+
+    /** Điểm tối đa của bài tập (null = không giới hạn). */
+    java.math.BigDecimal maxScore;
+
+    /** Điểm đạt tối thiểu (%). */
+    java.math.BigDecimal passingScore;
+
+    /**
+     * Gợi ý chấm từ AI (chỉ có sau khi mentor bấm nút "Xem gợi ý chấm từ AI").
+     * <p>
+     * AI KHÔNG chấm hộ — chỉ tham khảo để mentor chấm nhanh hơn.
+     */
+    HomeworkAiSuggestionResponse aiSuggestion;
+
+    /** true = bài này là trắc nghiệm (hệ thống tự chấm, mentor chỉ xem thống kê). */
+    Boolean autoGraded;
 }

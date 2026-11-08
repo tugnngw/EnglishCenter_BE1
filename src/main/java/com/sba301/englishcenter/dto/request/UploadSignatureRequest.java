@@ -37,6 +37,12 @@ public class UploadSignatureRequest {
     /** Bài tập liên quan (dùng làm folder + kiểm tra quyền truy cập). */
     UUID homeworkContentId;
 
+    /**
+     * Khóa học liên quan — BẮT BUỘC với {@code purpose = 'lesson_video'}
+     * để đặt file vào đúng thư mục {@code courses/{courseId}/lessons}.
+     */
+    UUID courseId;
+
     /** Định dạng file (pdf, docx, mp3, mp4...) — BE kiểm tra theo quy tắc. */
     @Size(max = 20, message = "Định dạng file không hợp lệ")
     String fileFormat;

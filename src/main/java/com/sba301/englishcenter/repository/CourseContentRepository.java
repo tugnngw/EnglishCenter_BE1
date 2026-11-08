@@ -15,6 +15,9 @@ public interface CourseContentRepository extends JpaRepository<CourseContent, UU
 
     List<CourseContent> findByCourse_CourseIdAndContentTypeOrderByContentOrderAsc(UUID courseId, ContentType contentType);
 
+    /** Toàn bộ nội dung của 1 loại trong khóa học — dùng để dò nội dung "xem thử". */
+    List<CourseContent> findByCourse_CourseIdAndContentType(UUID courseId, ContentType contentType);
+
     /** Toàn bộ nội dung vocabulary của mọi khóa học — dùng cho "thư viện từ vựng". */
     List<CourseContent> findByContentTypeOrderByCourse_CourseIdAscContentOrderAsc(ContentType contentType);
 

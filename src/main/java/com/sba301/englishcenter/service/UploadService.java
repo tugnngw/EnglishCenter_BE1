@@ -7,6 +7,7 @@ import com.sba301.englishcenter.entity.CourseContent;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.repository.CourseContentRepository;
+import com.sba301.englishcenter.repository.CourseRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.util.JsonUtil;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -33,6 +35,9 @@ import java.util.UUID;
  *     <li>PDF / Word / Excel / PowerPoint / txt → {@code raw};</li>
  *     <li>audio / video (mp3/wav/m4a/mp4/mov/webm) → {@code video}.</li>
  * </ul>
+ * <p>
+ * Mục đích {@code lesson_video} (video bài học) → thư mục
+ * {@code courses/{courseId}/lessons}, delivery type {@code upload} (public).
  */
 @Service
 @RequiredArgsConstructor
@@ -52,6 +57,7 @@ public class UploadService {
 
     private final CloudinaryService cloudinary;
     private final CourseContentRepository courseContentRepository;
+    private final CourseRepository courseRepository;
 
     /**
      * Cấp chữ ký upload.
@@ -85,10 +91,27 @@ public class UploadService {
             courseId = homework.getCourse() != null ? homework.getCourse().getCourseId() : null;
         }
 
+        // Video bài học: cần courseId để đặt file vào courses/{courseId}/lessons.
+        if ("lesson_video".equals(purpose)) {
+            courseId = request.getCourseId();
+            if (courseId == null) {
+                throw new AppException(ErrorCode.VALIDATION_ERROR,
+                        "Thiếu courseId khi upload video bài học");
+            }
+            // Kiểm tra khóa học có tồn tại — tránh tạo rác trên Cloudinary.
+            courseRepository.findById(courseId)
+                    .orElseThrow(() -> new AppException(ErrorCode.COURSE_NOT_FOUND));
+        }
+
         String extension = resolveExtension(request.getFileFormat(), request.getFileName());
-        // Bài nộp của học viên: chỉ nhận PDF.
-        if ("submission".equals(purpose) && !"pdf".equals(extension)) {
-            throw new AppException(ErrorCode.HOMEWORK_FILE_TYPE_NOT_ALLOWED, "Bài nộp chỉ nhận file PDF");
+        // Bài nộp của học viên: chỉ nhận định dạng Admin cho phép (mặc định PDF).
+        // `submission_audio` = bài ghi âm (Speaking) → cũng dùng cấu hình của bài tập.
+        if ("submission".equals(purpose) || "submission_audio".equals(purpose)) {
+            List<String> allowed = resolveAllowedFileTypes(homework);
+            if (!allowed.contains(extension)) {
+                throw new AppException(ErrorCode.HOMEWORK_FILE_TYPE_NOT_ALLOWED,
+                        "Bài nộp chỉ nhận file: " + String.join(", ", allowed).toUpperCase());
+            }
         }
         String resourceType = resolveResourceType(extension);
         long maxBytes = resolveMaxBytes(resourceType);
@@ -105,6 +128,12 @@ public class UploadService {
                 throw new AppException(ErrorCode.HOMEWORK_FILE_TYPE_NOT_ALLOWED,
                         "File nghe phải là audio (mp3, wav, m4a, aac, ogg)");
             }
+        }
+
+        // Video bài học: chỉ nhận file video (mp4, mov, webm, mkv...).
+        if ("lesson_video".equals(purpose) && !CloudinaryService.RESOURCE_VIDEO.equals(resourceType)) {
+            throw new AppException(ErrorCode.HOMEWORK_FILE_TYPE_NOT_ALLOWED,
+                    "Video bài học chỉ nhận file video (mp4, mov, webm, mkv)");
         }
 
         Long fileBytes = request.getFileBytes();
@@ -147,11 +176,37 @@ public class UploadService {
     }
 
     /**
+     * Định dạng file được phép nộp cho bài tập.
+     *
+     * <p>Đọc từ {@code content_data.allowedFileTypes} do Admin cấu hình.
+     * Thiếu → mặc định chỉ nhận PDF (hành vi cũ).
+     */
+    private List<String> resolveAllowedFileTypes(CourseContent homework) {
+        List<String> configured = homework == null
+                ? null
+                : HomeworkContentData.readAllowedFileTypes(homework.getContentData());
+        if (configured != null && !configured.isEmpty()) {
+            return configured;
+        }
+        // Bài ghi âm (Speaking) → mặc định các định dạng audio.
+        String type = homework == null
+                ? null
+                : HomeworkContentData.readText(homework.getContentData(), "submissionType");
+        if (type != null && "audio".equalsIgnoreCase(type.trim())) {
+            return List.of("mp3", "wav", "m4a", "aac", "ogg", "webm");
+        }
+        return List.of("pdf");
+    }
+
+    /**
      * Delivery type của file theo mục đích upload.
      * <ul>
      *     <li>{@code submission} / {@code submission_audio} → {@code authenticated} (private,
      *         URL có thời hạn do BE dựng khi xem);</li>
-     *     <li>{@code attachment} → {@code upload} (public, tài liệu đính kèm của bài tập).</li>
+     *     <li>{@code attachment} → {@code upload} (public, tài liệu đính kèm của bài tập);</li>
+     *     <li>{@code lesson_video} → {@code upload} (public) — video bài học phải phát được
+     *         cho học viên đã đăng ký bằng thẻ {@code <video>} thẳng; URL có thời hạn
+     *         (authenticated) sẽ hết hạn giữa lúc xem.</li>
      * </ul>
      */
     public String resolveDeliveryType(String purpose) {
@@ -199,6 +254,7 @@ public class UploadService {
     /**
      * Thư mục đích trên Cloudinary.
      * <ul>
+     *     <li>video bài học → {@code courses/{courseId}/lessons};</li>
      *     <li>tài liệu bài tập → {@code courses/{courseId}/homework};</li>
      *     <li>bài nộp học viên → {@code courses/{courseId}/homework/submissions/{homeworkId}/{studentId}};</li>
      *     <li>file nghe của đề thi / đề luyện tập ({@code exam_audio}, chỉ admin) → {@code exams/audio}.</li>
@@ -214,7 +270,8 @@ public class UploadService {
         } else {
             folder.append("courses/unassigned/");
         }
-        folder.append("homework");
+        // Video bài học nằm riêng khỏi homework.
+        folder.append("lesson_video".equals(purpose) ? "lessons" : "homework");
         if ("submission".equals(purpose) || "submission_audio".equals(purpose)) {
             folder.append("/submissions");
             if (homeworkId != null) {
@@ -238,7 +295,8 @@ public class UploadService {
         }
         String purpose = raw.trim().toLowerCase(Locale.ROOT);
         Set<String> allowed = new LinkedHashSet<>(Set.of(
-                "attachment", "submission", "submission_audio", "multiple_choice", "exam_audio"));
+                "attachment", "submission", "submission_audio", "multiple_choice", "exam_audio",
+                "lesson_video"));
         if (!allowed.contains(purpose)) {
             throw new AppException(ErrorCode.VALIDATION_ERROR, "Mục đích upload không hợp lệ: " + raw);
         }

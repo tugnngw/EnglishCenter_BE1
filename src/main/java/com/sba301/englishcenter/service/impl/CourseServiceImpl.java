@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.ContentType;
 import com.sba301.englishcenter.common.enums.CourseStatus;
+import com.sba301.englishcenter.common.enums.NotificationType;
 import com.sba301.englishcenter.dto.request.CreateCourseContentRequest;
 import com.sba301.englishcenter.dto.request.CreateCourseRequest;
 import com.sba301.englishcenter.dto.request.UpdateCourseContentRequest;
@@ -37,9 +38,11 @@ import com.sba301.englishcenter.repository.VocabularySetRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.service.CourseService;
 import com.sba301.englishcenter.service.HomeworkContentData;
+import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.specification.CourseSpecification;
 import com.sba301.englishcenter.util.CourseRules;
 import com.sba301.englishcenter.common.enums.ExamStatus;
+import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.util.JsonUtil;
 import com.sba301.englishcenter.util.SessionEnrollmentChecker;
 import com.sba301.englishcenter.util.SessionVariableHelper;
@@ -59,6 +62,7 @@ import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -83,6 +87,8 @@ public class CourseServiceImpl implements CourseService {
     private final ExamRepository examRepository;
     private final HomeworkSubmissionRepository homeworkSubmissionRepository;
     private final SessionEnrollmentChecker enrollmentChecker;
+    /** Gửi thông báo cho mentor khi Admin giao bài tập cần chấm tay. */
+    private final NotificationService notificationService;
 
     @Override
     @Transactional(readOnly = true)
@@ -298,11 +304,29 @@ public class CourseServiceImpl implements CourseService {
         UUID currentUserId = SecurityUtils.getCurrentUserId().orElse(null);
         boolean canView = enrollmentChecker.canAccessContent(currentUserId, courseId);
 
+        // Nội dung 'vocabulary' được admin đánh dấu "xem thử" (isPreview = true)
+        // → học viên CHƯA ghi danh khóa học vẫn xem được các bộ từ của nội dung đó.
+        // (Trước đây chỉ 'lesson' mới có cơ chế xem thử → vocabulary luôn bị khoá.)
+        Set<UUID> previewSetIds = collectPreviewVocabularySetIds(courseId);
+
         List<CourseVocabularySet> links =
                 courseVocabularySetRepository.findByCourse_CourseIdWithDetails(courseId);
 
+        // Không có nội dung nào được admin tick "xem thử" → mở bộ ĐẦU TIÊN làm
+        // mẫu học thử, để nút "Học thử miễn phí" luôn có nội dung để xem.
+        boolean useSample = !canView && previewSetIds.isEmpty() && !links.isEmpty();
+        UUID sampleSetId = useSample ? links.get(0).getVocabularySet().getSetId() : null;
+
+        final boolean sampleMode = useSample;
+        final UUID sampleId = sampleSetId;
+
         return links.stream()
-                .map(link -> toCourseVocabularyResponse(link, canView))
+                .map(link -> {
+                    UUID setId = link.getVocabularySet().getSetId();
+                    boolean isPreview = previewSetIds.contains(setId)
+                            || (sampleMode && setId.equals(sampleId));
+                    return toCourseVocabularyResponse(link, canView, isPreview);
+                })
                 .toList();
     }
 
@@ -317,6 +341,10 @@ public class CourseServiceImpl implements CourseService {
         List<CourseContent> contents =
                 courseContentRepository.findByCourse_CourseIdAndContentTypeOrderByContentOrderAsc(courseId, ContentType.HOMEWORK);
 
+        // Bài tập KHÔNG mở khoá cho người chưa ghi danh — kể cả khi admin tick
+        // "xem thử" hay khi dùng bài đầu tiên làm mẫu. Lý do: bài tập gắn với
+        // quyền nộp + chấm điểm, học thử chỉ mở phần XEM (bài học, từ vựng).
+        // → Học viên chưa mua khóa học thấy bài tập ở trạng thái khoá.
         return contents.stream()
                 .map(content -> buildContentResponse(content, currentUserId, isEnrolled))
                 .toList();
@@ -355,7 +383,7 @@ public class CourseServiceImpl implements CourseService {
             if (vocabularySetIds.isEmpty()) {
                 throw new AppException(ErrorCode.VOCABULARY_CONTENT_MUST_BE_ASSIGNED);
             }
-            contentData = buildVocabularyContentData(vocabularySetIds);
+            contentData = buildVocabularyContentData(vocabularySetIds, readIsPreview(contentData));
         } else if (contentType == ContentType.HOMEWORK) {
             contentData = CourseRules.validateHomeworkData(contentData, null);
             exam = isMultipleChoiceHomework(contentData)
@@ -390,6 +418,10 @@ public class CourseServiceImpl implements CourseService {
         }
 
         log.info("Đã thêm nội dung: contentId={}, type={}", content.getContentId(), contentType);
+
+        // Bài tập cần mentor chấm tay (không phải trắc nghiệm) → báo mentor
+        // phụ trách khóa học biết có bài mới, tránh bài nằm im không ai thấy.
+        notifyMentorNewHomework(course, content, contentData);
 
         return buildContentResponse(content, currentUserId, true);
     }
@@ -426,11 +458,11 @@ public class CourseServiceImpl implements CourseService {
                 : content.getContentData();
 
         if (content.getContentType() == ContentType.VOCABULARY) {
-            List<UUID> vocabularySetIds = resolveVocabularySetIds(contentData, request.getVocabularySetIds());
+            List<UUID>             vocabularySetIds = resolveVocabularySetIds(contentData, request.getVocabularySetIds());
             if (vocabularySetIds.isEmpty()) {
                 throw new AppException(ErrorCode.VOCABULARY_CONTENT_MUST_BE_ASSIGNED);
             }
-            contentData = buildVocabularyContentData(vocabularySetIds);
+            contentData = buildVocabularyContentData(vocabularySetIds, readIsPreview(contentData));
             content.setContentData(contentData);
         } else if (content.getContentType() == ContentType.HOMEWORK) {
             String previousData = content.getContentData();
@@ -546,10 +578,21 @@ public class CourseServiceImpl implements CourseService {
         return result;
     }
 
-    /** Tạo JSONB `content_data` chuẩn cho nội dung 'vocabulary'. */
-    private String buildVocabularyContentData(List<UUID> setIds) {
+    /**
+     * Tạo JSONB `content_data` chuẩn cho nội dung 'vocabulary'.
+     * <p>
+     * Giữ lại cờ {@code isPreview} (nếu có) để admin có thể đánh dấu nội dung
+     * từ vựng là "xem thử" — học viên chưa ghi danh vẫn xem được bộ từ này.
+     */
+    private String buildVocabularyContentData(List<UUID> setIds, boolean isPreview) {
         List<String> ids = setIds.stream().map(UUID::toString).toList();
-        return "{\"setIds\":" + JsonUtil.toJson(ids) + "}";
+        return "{\"setIds\":" + JsonUtil.toJson(ids)
+                + ",\"isPreview\":" + isPreview + "}";
+    }
+
+    /** Đọc cờ {@code isPreview} từ {@code content_data} (mặc định false). */
+    private boolean readIsPreview(String contentData) {
+        return JsonUtil.readBoolean(contentData, "isPreview", false);
     }
 
     /**
@@ -610,15 +653,33 @@ public class CourseServiceImpl implements CourseService {
         }
         Exam exam = examRepository.findById(examId)
                 .orElseThrow(() -> new AppException(ErrorCode.EXAM_NOT_FOUND));
-        // Đề phải thuộc khóa học đang chỉnh sửa — tránh gắn nhầm đề của khóa khác.
+        // Đề thuộc KHÁC khóa học đang chỉnh sửa → không gắn được (học viên khóa
+        // này cũng không mở được lượt thi vì `ExamAccessPolicy` yêu cầu
+        // enrollment đúng khóa của đề).
         if (courseId != null && exam.getCourse() != null
                 && !courseId.equals(exam.getCourse().getCourseId())) {
-            throw new AppException(ErrorCode.EXAM_NOT_FOUND);
+            throw new AppException(ErrorCode.EXAM_NOT_FOUND,
+                    "Đề thi \"" + exam.getExamTitle() + "\" thuộc khóa học khác");
         }
         // Đề nháp / lưu trữ thì học viên không mở được lượt thi.
         if (exam.getStatus() != ExamStatus.PUBLISHED) {
             throw new AppException(ErrorCode.VALIDATION_ERROR,
                     "Đề thi \"" + exam.getExamTitle() + "\" chưa xuất bản, hãy xuất bản đề trước khi gắn vào bài tập");
+        }
+        // Đề trả phí (không gắn khóa học) → học viên phải mua mới làm được
+        // → không cho gắn vào bài tập.
+        if (Boolean.FALSE.equals(exam.getIsFree())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Đề thi \"" + exam.getExamTitle() + "\" là đề trả phí, không thể gắn vào bài tập");
+        }
+        // Đề giữa kỳ / cuối kỳ có điều kiện tiên quyết (đạt quiz / đạt giữa kỳ +
+        // đủ bài tập của khóa). Gắn vào bài tập sẽ tạo vòng lặp: bài tập này
+        // chưa nộp → đề mở không được → học viên không nộp được bài tập.
+        // → Chỉ cho gắn đề `quiz` (và placement test) vào bài tập.
+        if (exam.getExamType() == ExamType.MIDTERM || exam.getExamType() == ExamType.FINAL) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Đề \"" + exam.getExamTitle() + "\" là đề giữa kỳ/cuối kỳ (có điều kiện tiên quyết), "
+                            + "không thể gắn vào bài tập. Hãy dùng đề Quiz.");
         }
         return exam;
     }
@@ -703,6 +764,43 @@ public class CourseServiceImpl implements CourseService {
                 : JsonUtil.mapper().createObjectNode();
         object.put("examId", examId.toString());
         return object.toString();
+    }
+
+    /**
+     * Báo mentor phụ trách khóa học khi Admin giao một BÀI TẬP MỚI cần chấm tay.
+     * <p>
+     * Bài trắc nghiệm ({@code multiple_choice}) được chấm tự động → không báo.
+     * Bài tự luận / nộp file / ghi âm → mentor phải chấm → cần báo để mentor
+     * biết mà vào hàng đợi chấm, tránh bài nằm im không ai thấy.
+     * <p>
+     * Lỗi gửi thông báo KHÔNG làm hỏng việc tạo bài tập → nuốt exception.
+     */
+    private void notifyMentorNewHomework(Course course, CourseContent content, String contentData) {
+        if (content.getContentType() != ContentType.HOMEWORK) {
+            return;
+        }
+        if (isMultipleChoiceHomework(contentData)) {
+            return; // chấm tự động → không cần mentor
+        }
+        User mentor = course.getMentor();
+        if (mentor == null || mentor.getUserId() == null) {
+            return; // khóa học chưa gán mentor
+        }
+        try {
+            String dueDate = JsonUtil.readString(contentData, "dueDate");
+            StringBuilder message = new StringBuilder("Bạn được giao bài tập \"")
+                    .append(content.getTitle()).append("\" để chấm.");
+            if (dueDate != null && !dueDate.isBlank()) {
+                message.append(" Hạn nộp: ").append(dueDate).append('.');
+            }
+            notificationService.notify(
+                    mentor.getUserId(),
+                    NotificationType.homework_deadline,
+                    "Bài tập mới cần chấm",
+                    message.toString());
+        } catch (Exception e) {
+            log.warn("Không gửi được thông báo bài tập cho mentor: {}", e.getMessage());
+        }
     }
 
     // ========================================================================
@@ -808,11 +906,19 @@ public class CourseServiceImpl implements CourseService {
      * <p>
      * Học viên CHƯA ghi danh khóa học → không trả danh sách từ (khoá nội dung),
      * chỉ trả metadata để màn client hiển thị trạng thái "mở khoá".
+     * <p>
+     * Ngoại lệ: bộ thuộc nội dung 'vocabulary' được admin đánh dấu "xem thử"
+     * ({@code isPreview = true}) → vẫn trả đầy đủ từ cho học viên chưa ghi danh.
+     *
+     * @param canView   Học viên đã ghi danh khóa học (xem được mọi bộ).
+     * @param isPreview Bộ này được admin cho xem thử miễn phí.
      */
-    private CourseVocabularySetResponse toCourseVocabularyResponse(CourseVocabularySet link, boolean canView) {
+    private CourseVocabularySetResponse toCourseVocabularyResponse(CourseVocabularySet link, boolean canView,
+                                                                   boolean isPreview) {
         VocabularySet set = link.getVocabularySet();
+        boolean readable = canView || isPreview;
 
-        List<VocabularyWordResponse> words = canView
+        List<VocabularyWordResponse> words = readable
                 ? set.getWords().stream()
                 .sorted(Comparator.comparing(l -> l.getWordOrder() == null ? 0 : l.getWordOrder()))
                 .map(l -> toVocabularyWordResponse(l.getWord()))
@@ -824,12 +930,33 @@ public class CourseServiceImpl implements CourseService {
                 .setId(set.getSetId())
                 .assignmentId(link.getId())
                 .title(set.getTitle())
-                .description(canView ? set.getDescription() : null)
+                .description(readable ? set.getDescription() : null)
                 .displayOrder(link.getDisplayOrder())
                 .words(words)
-                .wordCount(canView ? words.size() : null)
-                .locked(!canView)
+                .wordCount(readable ? words.size() : null)
+                .locked(!readable)
+                .isPreview(isPreview)
                 .build();
+    }
+
+    /**
+     * Gom id các bộ từ vựng nằm trong nội dung 'vocabulary' được admin đánh dấu
+     * "xem thử" ({@code content_data.isPreview = true}).
+     * <p>
+     * Dùng để mở khoá bộ từ cho học viên CHƯA ghi danh khóa học khi họ bấm
+     * "Học thử miễn phí".
+     */
+    private Set<UUID> collectPreviewVocabularySetIds(UUID courseId) {
+        Set<UUID> result = new LinkedHashSet<>();
+        List<CourseContent> vocabContents =
+                courseContentRepository.findByCourse_CourseIdAndContentType(courseId, ContentType.VOCABULARY);
+        for (CourseContent content : vocabContents) {
+            if (!JsonUtil.readBoolean(content.getContentData(), "isPreview", false)) {
+                continue;
+            }
+            result.addAll(readVocabularySetIds(content.getContentData()));
+        }
+        return result;
     }
 
     private VocabularyWordResponse toVocabularyWordResponse(VocabularyWord word) {
@@ -860,11 +987,16 @@ public class CourseServiceImpl implements CourseService {
      *     </ul>
      *   </li>
      *   <li>Nội dung bị khóa chỉ trả metadata, không trả description hoặc contentData.</li>
+     *   <li>BÀI TẬP (homework) LUÔN khoá với người chưa ghi danh — kể cả khi
+     *       admin tick "xem thử". Bài tập gắn với quyền nộp + chấm điểm, học thử
+     *       chỉ mở phần XEM (bài học video + từ vựng).</li>
      * </ul>
      */
     private CourseContentResponse buildContentResponse(CourseContent content, UUID currentUserId, boolean isEnrolled) {
         boolean isPreview = JsonUtil.readBoolean(content.getContentData(), "isPreview", false);
-        boolean locked = !isEnrolled && !isPreview;
+        // Bài tập không bao giờ mở khoá cho người chưa mua khóa học.
+        boolean homeworkAlwaysLocked = content.getContentType() == ContentType.HOMEWORK;
+        boolean locked = !isEnrolled && (homeworkAlwaysLocked || !isPreview);
 
         String videoUrl = locked ? null : JsonUtil.readString(content.getContentData(), "videoUrl");
 
