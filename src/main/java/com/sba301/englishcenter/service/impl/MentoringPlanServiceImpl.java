@@ -102,10 +102,11 @@ public class MentoringPlanServiceImpl implements MentoringPlanService {
         }
 
         // 4. Kiểm tra giờ từng buổi: trong tương lai, tối đa N ngày tới, độ dài hợp lệ, không trùng nhau
-        List<LocalDateTime[]> times = request.getSessions().stream()
-                .map(this::toUtcRange)
-                .sorted(Comparator.comparing((LocalDateTime[] t) -> t[0]))
+        // Sắp theo giờ bắt đầu, giữ nguyên topic đi kèm từng buổi
+        List<PlanSessionRequest> sessions = request.getSessions().stream()
+                .sorted(Comparator.comparing(PlanSessionRequest::getStartTime))
                 .toList();
+        List<LocalDateTime[]> times = sessions.stream().map(this::toUtcRange).toList();
         LocalDateTime previousEnd = null;
         for (LocalDateTime[] t : times) {
             sessionTimeValidator.validate(t[0], t[1]);
@@ -171,6 +172,7 @@ public class MentoringPlanServiceImpl implements MentoringPlanService {
                     .endTime(times.get(i)[1])
                     .price(prices.get(i))
                     .meetingUrl(meetingUrl)
+                    .topic(StringUtils.hasText(sessions.get(i).getTopic()) ? sessions.get(i).getTopic().trim() : null)
                     .status(ScheduleStatus.booked)
                     .build());
             bookingRepository.save(Booking.builder()
@@ -373,6 +375,10 @@ public class MentoringPlanServiceImpl implements MentoringPlanService {
                     .price(schedule.getPrice())
                     // Chưa thanh toán thì chưa lộ link phòng học
                     .meetingUrl(plan.getStatus() == MentoringPlanStatus.pending_payment ? null : schedule.getMeetingUrl())
+                    .topic(schedule.getTopic())
+                    .rescheduleRequestedAt(UtcTimeUtil.toInstant(booking.getRescheduleRequestedAt()))
+                    .reschedulePreferredTime(UtcTimeUtil.toInstant(booking.getReschedulePreferredTime()))
+                    .rescheduleRequestNote(booking.getRescheduleRequestNote())
                     .status(booking.getStatus().name())
                     .cancelReason(booking.getCancelReason())
                     .cancelledAt(UtcTimeUtil.toInstant(booking.getCancelledAt()))

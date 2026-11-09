@@ -3,6 +3,8 @@ package com.sba301.englishcenter.service;
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.BookingStatus;
 import com.sba301.englishcenter.dto.request.CancelBookingRequest;
+import com.sba301.englishcenter.dto.request.RescheduleBookingRequest;
+import com.sba301.englishcenter.dto.request.RescheduleRequestRequest;
 import com.sba301.englishcenter.dto.request.UpdateBookingStatusRequest;
 import com.sba301.englishcenter.dto.response.BookingResponse;
 import org.springframework.data.domain.Pageable;
@@ -10,7 +12,7 @@ import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 
 /**
- * Lịch hẹn 1-1. Không còn đặt slot công khai / đổi lịch: buổi học được tạo trong gói kèm 1-1
+ * Lịch hẹn 1-1. Không còn đặt slot công khai, học viên không tự đổi lịch (chỉ mentor dời buổi khi bận): buổi học được tạo trong gói kèm 1-1
  * ({@link MentoringPlanService}) sau khi mentor tư vấn, học viên thanh toán cả gói.
  */
 public interface BookingService {
@@ -29,6 +31,21 @@ public interface BookingService {
      * Mentor cập nhật kết quả buổi học: completed hoặc no_show (TASK D5-11).
      */
     BookingResponse updateStatusByMentor(UUID mentorId, UUID bookingId, UpdateBookingStatusRequest request);
+
+    /**
+     * Mentor dời 1 buổi (chưa học) sang giờ khác khi bận (V26): trước giờ học ít nhất N giờ (cấu hình, mặc định 2),
+     * giữ nguyên thời lượng / học phí, không trùng lịch mentor và học viên, báo cho học viên.
+     */
+    BookingResponse rescheduleByMentor(UUID mentorId, UUID bookingId, RescheduleBookingRequest request);
+
+    /**
+     * Học viên xin dời 1 buổi đã xác nhận (V28): trước giờ học ít nhất N giờ (như mentor dời), ghi đè yêu cầu cũ,
+     * báo mentor. Học viên không tự đổi giờ - mentor quyết định.
+     */
+    BookingResponse requestReschedule(UUID studentId, UUID bookingId, RescheduleRequestRequest request);
+
+    /** Mentor từ chối yêu cầu dời lịch của học viên (V28): xóa yêu cầu, báo học viên kèm lý do. */
+    BookingResponse rejectRescheduleRequest(UUID mentorId, UUID bookingId, String reason);
 
     /**
      * Lịch của học viên: sắp tới (past = false) hoặc đã qua (past = true) (TASK D5-12).

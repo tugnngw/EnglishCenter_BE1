@@ -1,5 +1,6 @@
 package com.sba301.englishcenter.dto.response;
 
+import com.sba301.englishcenter.dto.consultation.AvailableSlotData;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -7,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -33,4 +35,6 @@ public class StudentOverviewResponse {
     private long levelTestCount;
     /** Trạng thái yêu cầu tư vấn gần nhất, null = chưa gửi */
     private String consultationStatus;
+    /** Lịch rảnh hằng tuần (giờ Việt Nam, "HH:mm"), rỗng nếu chưa gửi */
+    private List<AvailableSlotData> availableSlots;
 }

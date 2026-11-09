@@ -25,6 +25,7 @@ import com.sba301.englishcenter.service.HomeworkGraderAssignmentService;
 import com.sba301.englishcenter.service.HomeworkGradingService;
 import com.sba301.englishcenter.service.HomeworkSubmissionMapper;
 import com.sba301.englishcenter.service.HomeworkSubmissionService;
+import com.sba301.englishcenter.service.MentorHomeworkService;
 import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.util.JsonUtil;
 import com.sba301.englishcenter.util.SessionVariableHelper;
@@ -76,6 +77,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
             Set.of("mp3", "wav", "m4a", "aac", "ogg", "webm", "mp4", "mov");
     /** Định dạng nộp mặc định khi Admin không cấu hình (giữ hành vi cũ: chỉ PDF). */
     private static final String DEFAULT_ALLOWED_FILE_TYPE = "pdf";
+    private static final java.time.ZoneId VN_ZONE = java.time.ZoneId.of("Asia/Ho_Chi_Minh");
 
     private final HomeworkSubmissionRepository submissionRepository;
     private final CourseContentRepository courseContentRepository;
@@ -89,6 +91,8 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
     private final CloudinaryService cloudinary;
     private final NotificationService notificationService;
     private final PlatformTransactionManager transactionManager;
+    // Bài tập riêng của mentor (V27, không thuộc khóa học): quyền làm bài + hạn nộp theo lộ trình
+    private final MentorHomeworkService mentorHomeworkService;
 
     @Override
     public HomeworkSubmissionResponse submitHomework(CreateHomeworkSubmissionRequest request) {
@@ -104,9 +108,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
                     "Nội dung trừ tới không phải bài tập (homework)");
         }
 
-        if (!enrollments.isEnrolled(studentId, homework.getCourse().getCourseId())) {
-            throw new AppException(ErrorCode.ENROLLMENT_REQUIRED);
-        }
+        assertCanAccess(homework, studentId);
         sessionVariableHelper.setCurrentUserId(studentId);
 
         User student = userRepository.findById(studentId)
@@ -145,7 +147,9 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
         // --- Học viên KHÔNG mua mentor → AI chấm tự động ngay ---
         // Gọi NGOÀI transaction vừa commit (AI chậm 10-60s, không giữ khoá dòng DB).
         // Nếu AI lỗi (chưa cấu hình API key / lỗi mạng) → bài vẫn nằm chờ, không chặn nộp.
-        if (!TYPE_MULTIPLE_CHOICE.equalsIgnoreCase(submissionType)) {
+        // Bài tập riêng của mentor (V27): luôn do mentor 1-1 chấm tay, không gọi AI
+        if (!TYPE_MULTIPLE_CHOICE.equalsIgnoreCase(submissionType)
+                && !mentorHomeworkService.isMentorHomework(homework)) {
             try {
                 aiGradingService.gradeByAi(submission.getSubmissionId(), studentId);
             } catch (Exception ex) {
@@ -458,12 +462,35 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
 
     @Override
     public void assertCanAttempt(CourseContent homework, UUID studentId) {
-        assertDueDateNotPassed(homework);
+        assertDueDateNotPassed(homework, studentId);
         assertAttemptsNotExceeded(homework, studentId);
     }
 
+    /**
+     * Quyền làm bài: bài của khóa học → phải ghi danh khóa học;
+     * bài riêng của mentor (V27, course = null) → phải ghi danh lộ trình chứa bài.
+     */
+    private void assertCanAccess(CourseContent homework, UUID studentId) {
+        if (homework.getCourse() == null) {
+            mentorHomeworkService.assertStudentCanAccess(studentId, homework);
+            return;
+        }
+        if (!enrollments.isEnrolled(studentId, homework.getCourse().getCourseId())) {
+            throw new AppException(ErrorCode.ENROLLMENT_REQUIRED);
+        }
+    }
+
     /** Hạn nộp đã qua → không cho nộp. */
-    private void assertDueDateNotPassed(CourseContent homework) {
+    private void assertDueDateNotPassed(CourseContent homework, UUID studentId) {
+        // Bài riêng của mentor (V27): hạn = ngày ghi danh lộ trình + dueDays (giờ Việt Nam)
+        if (mentorHomeworkService.isMentorHomework(homework)) {
+            LocalDate due = mentorHomeworkService.resolveDueDate(homework, studentId);
+            if (due != null && LocalDate.now(VN_ZONE).isAfter(due)) {
+                throw new AppException(ErrorCode.HOMEWORK_DUE_DATE_PASSED,
+                        "Bài tập đã hết hạn nộp (" + due + ")");
+            }
+            return;
+        }
         String raw = HomeworkContentData.readText(homework.getContentData(), "dueDate");
         if (raw == null || raw.isBlank()) {
             return;

@@ -24,6 +24,7 @@ import com.sba301.englishcenter.service.EnrollmentService;
 import com.sba301.englishcenter.service.ExamAttemptService;
 import com.sba301.englishcenter.service.ExamService;
 import com.sba301.englishcenter.service.LearningPathService;
+import com.sba301.englishcenter.service.MentorHomeworkService;
 import com.sba301.englishcenter.service.PracticeExamService;
 import com.sba301.englishcenter.util.JsonbMapper;
 import com.sba301.englishcenter.util.UtcTimeUtil;
@@ -66,6 +67,8 @@ public class LearningPathServiceImpl implements LearningPathService {
     private final EnrollmentService enrollmentService;
     private final ExamAttemptService examAttemptService;
     private final ExamRepository examRepository;
+    // Chặng HOMEWORK: bài tập riêng của mentor (V27)
+    private final MentorHomeworkService mentorHomeworkService;
 
     // ===================== public =====================
 
@@ -104,7 +107,7 @@ public class LearningPathServiceImpl implements LearningPathService {
                 .name(request.getName().trim())
                 .description(trimToNull(request.getDescription()))
                 .totalSessions(request.getTotalSessions())
-                .items(JsonbMapper.write(buildItems(request.getItems(), List.of())))
+                .items(JsonbMapper.write(buildItems(request.getItems(), List.of(), adminId)))
                 .studentProgress("[]")
                 .build());
         log.info("User {} created learning path {}", adminId, path.getLearningPathId());
@@ -122,7 +125,7 @@ public class LearningPathServiceImpl implements LearningPathService {
         path.setDescription(trimToNull(request.getDescription()));
         path.setTotalSessions(request.getTotalSessions());
         // Giữ itemId của chặng cũ (cùng type + refId); tiến độ luôn tính lại theo dữ liệu thật nên không bị lệch
-        path.setItems(JsonbMapper.write(buildItems(request.getItems(), itemsOf(path))));
+        path.setItems(JsonbMapper.write(buildItems(request.getItems(), itemsOf(path), path.getCreatedByUserId())));
         return toResponse(learningPathRepository.save(path));
     }
 
@@ -235,12 +238,18 @@ public class LearningPathServiceImpl implements LearningPathService {
             // Đề luyện tập AI nay thuộc module Exam (examScope = practice); vẫn tính cho refId đề cũ (bảng practice_exams)
             case PRACTICE_EXAM -> examAttemptService.hasReachedPracticeBand(studentId, item.refId(), item.targetBand())
                     || practiceExamService.hasReachedBand(studentId, item.refId(), item.targetBand());
+            // Bài tập của mentor: có bài nộp được chấm ĐẠT (mentor 1-1 hoặc AI chấm)
+            case HOMEWORK -> mentorHomeworkService.hasPassed(studentId, item.refId());
         };
     }
 
     // ===================== helpers =====================
 
-    private List<LearningPathItemData> buildItems(List<LearningPathItemRequest> requests, List<LearningPathItemData> existing) {
+    /**
+     * @param ownerId người tạo lộ trình - chặng HOMEWORK chỉ được là bài tập do chính người này soạn (V27)
+     */
+    private List<LearningPathItemData> buildItems(List<LearningPathItemRequest> requests, List<LearningPathItemData> existing,
+                                                  UUID ownerId) {
         Map<String, UUID> existingIds = new HashMap<>();
         existing.forEach(i -> existingIds.put(i.type() + ":" + i.refId(), i.itemId()));
         Set<String> seen = new HashSet<>();
@@ -255,18 +264,20 @@ public class LearningPathServiceImpl implements LearningPathService {
                 throw new AppException(ErrorCode.LEARNING_PATH_ITEM_INVALID);
             }
             items.add(new LearningPathItemData(existingIds.getOrDefault(key, UUID.randomUUID()), r.getStage().trim(),
-                    r.getOrder(), r.getType(), r.getRefId(), resolveTitle(r.getType(), r.getRefId()), r.getTargetBand()));
+                    r.getOrder(), r.getType(), r.getRefId(), resolveTitle(r.getType(), r.getRefId(), ownerId),
+                    r.getTargetBand()));
         }
         items.sort(Comparator.comparingInt(LearningPathItemData::order));
         return items;
     }
 
     /** Lấy tiêu đề qua service của module khác; không tồn tại -> lỗi NOT_FOUND tương ứng. */
-    private String resolveTitle(LearningPathItemType type, UUID refId) {
+    private String resolveTitle(LearningPathItemType type, UUID refId, UUID ownerId) {
         return switch (type) {
             case COURSE -> courseService.getCourseById(refId).getTitle();
             case EXAM -> examService.getExamDetail(refId).getExam().getExamTitle();
             case PRACTICE_EXAM -> resolvePracticeTitle(refId);
+            case HOMEWORK -> mentorHomeworkService.resolveTitleForPath(refId, ownerId);
         };
     }
 

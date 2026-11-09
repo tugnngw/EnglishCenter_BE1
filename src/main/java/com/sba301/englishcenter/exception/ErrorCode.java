@@ -202,6 +202,17 @@ public enum ErrorCode {
     COURSE_CANNOT_ACTIVATE(6048, "Khóa học cần có học phí và ít nhất 1 nội dung trước khi mở bán", HttpStatus.BAD_REQUEST),
     HOMEWORK_LOCKED(6049, "Bài tập đã có học viên nộp: không thể đổi hình thức nộp, đề thi hoặc điểm tối đa", HttpStatus.CONFLICT),
     HOMEWORK_HAS_SUBMISSIONS(6050, "Bài tập đã có bài nộp của học viên, không thể xóa", HttpStatus.CONFLICT),
+    // Dev 5: lịch rảnh khi xin tư vấn (V26)
+    BOOKING_RESCHEDULE_DEADLINE_PASSED(6052, "Chỉ được dời lịch trước giờ học ít nhất %d giờ", HttpStatus.BAD_REQUEST),
+    BOOKING_RESCHEDULE_SAME_TIME(6053, "Giờ mới trùng với giờ hiện tại của buổi học", HttpStatus.BAD_REQUEST),
+    // Dev 5: bài tập của mentor (V27)
+    MENTOR_HOMEWORK_NOT_FOUND(6054, "Không tìm thấy bài tập", HttpStatus.NOT_FOUND),
+    MENTOR_HOMEWORK_IN_PATH(6055, "Bài tập đang nằm trong lộ trình, hãy gỡ khỏi lộ trình trước khi xóa", HttpStatus.CONFLICT),
+    HOMEWORK_PATH_ENROLLMENT_REQUIRED(6056, "Hãy ghi danh lộ trình có bài tập này trước khi làm bài", HttpStatus.FORBIDDEN),
+    MENTOR_HOMEWORK_NOT_OWNED(6057, "Chỉ gắn được bài tập do chính người tạo lộ trình soạn", HttpStatus.BAD_REQUEST),
+    RESCHEDULE_REQUEST_NOT_FOUND(6059, "Buổi học này không có yêu cầu dời lịch đang chờ", HttpStatus.BAD_REQUEST),
+    MENTOR_HOMEWORK_PLAN_REQUIRED(6058, "Bài tập của mentor chỉ dành cho học viên đã mua gói kèm 1-1", HttpStatus.FORBIDDEN),
+    CONSULTATION_SLOT_INVALID(6051, "Khung giờ rảnh không hợp lệ: giờ kết thúc phải sau giờ bắt đầu", HttpStatus.BAD_REQUEST),
     ;
 
     private final int code;

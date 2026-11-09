@@ -75,4 +75,15 @@ public class Booking extends BaseEntity {
     // Thời điểm (UTC) đã gửi nhắc "sắp đến giờ học" — null = chưa nhắc (V9, TASK-D5-02 / D5-18)
     @Column(name = "reminder_sent_at")
     private LocalDateTime reminderSentAt;
+
+    // Học viên xin dời lịch (V28): thời điểm gửi (UTC), giờ mong muốn (UTC, có thể trống), lý do.
+    // reschedule_requested_at = null -> không có yêu cầu đang chờ (mentor dời / từ chối thì xóa)
+    @Column(name = "reschedule_requested_at")
+    private LocalDateTime rescheduleRequestedAt;
+
+    @Column(name = "reschedule_preferred_time")
+    private LocalDateTime reschedulePreferredTime;
+
+    @Column(name = "reschedule_request_note", length = 500)
+    private String rescheduleRequestNote;
 }

@@ -44,9 +44,19 @@ public class CourseContent extends BaseEntity {
     @Column(name = "content_id")
     private UUID contentId;
 
+    /**
+     * Khóa học chứa nội dung. {@code null} = bài tập riêng của mentor (V27, xem {@link #ownerMentorId}).
+     */
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "course_id", nullable = false)
+    @JoinColumn(name = "course_id")
     private Course course;
+
+    /**
+     * Mentor tạo bài tập (V27) — chỉ có ở bài tập KHÔNG thuộc khóa học ({@code course = null}).
+     * Mentor gắn bài vào lộ trình của mình (chặng HOMEWORK); bài nộp / chấm dùng chung với homework khóa học.
+     */
+    @Column(name = "owner_mentor_id")
+    private UUID ownerMentorId;
 
     /**
      * Cột `content_type` là PostgreSQL native enum (`content_type_enum`), KHÔNG phải

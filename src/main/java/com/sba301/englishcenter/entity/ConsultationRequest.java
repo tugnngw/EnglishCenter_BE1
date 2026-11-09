@@ -15,12 +15,14 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnTransformer;
 
 import java.util.UUID;
 
 /**
  * Bảng consultation_requests (V21): học viên để lại SĐT nhờ mentor tư vấn lộ trình.
  * Mọi mentor đều thấy yêu cầu "pending"; mentor nhận trước (mentor_id) phụ trách liên hệ.
+ * available_slots (V26): lịch rảnh hằng tuần để mentor xếp các buổi của gói kèm 1-1.
  */
 @Entity
 @Table(name = "consultation_requests")
@@ -52,4 +54,9 @@ public class ConsultationRequest extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private ConsultationStatus status;
+
+    // Khung giờ rảnh hằng tuần (JSONB, V26) - xem AvailableSlotData
+    @Column(name = "available_slots", columnDefinition = "jsonb")
+    @ColumnTransformer(write = "cast(? as jsonb)")
+    private String availableSlots;
 }

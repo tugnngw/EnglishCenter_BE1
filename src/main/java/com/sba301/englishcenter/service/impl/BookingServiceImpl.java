@@ -6,6 +6,8 @@ import com.sba301.englishcenter.common.enums.MentoringPlanStatus;
 import com.sba301.englishcenter.common.enums.PaymentOrderStatus;
 import com.sba301.englishcenter.common.enums.ScheduleStatus;
 import com.sba301.englishcenter.dto.request.CancelBookingRequest;
+import com.sba301.englishcenter.dto.request.RescheduleBookingRequest;
+import com.sba301.englishcenter.dto.request.RescheduleRequestRequest;
 import com.sba301.englishcenter.dto.request.UpdateBookingStatusRequest;
 import com.sba301.englishcenter.dto.response.BookingResponse;
 import com.sba301.englishcenter.entity.Booking;
@@ -35,6 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -48,6 +52,8 @@ public class BookingServiceImpl implements BookingService {
     // Booking còn hiệu lực: được hủy, chưa có kết quả
     private static final List<BookingStatus> ACTIVE_STATUSES = List.of(BookingStatus.pending, BookingStatus.confirmed);
     private static final String SORT_FIELD = "schedule.startTime";
+    private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
+    private static final DateTimeFormatter VN_FORMAT = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
 
     private final BookingRepository bookingRepository;
     private final MentorScheduleRepository mentorScheduleRepository;
@@ -59,10 +65,16 @@ public class BookingServiceImpl implements BookingService {
     private final PaymentOrderRepository paymentOrderRepository;
     // Gói kèm 1-1 (V21): đánh dấu hoàn thành khi học xong mọi buổi
     private final MentoringPlanRepository mentoringPlanRepository;
+    // Kiểm tra giờ buổi học khi mentor dời lịch (V26)
+    private final SessionTimeValidator sessionTimeValidator;
 
     // Phải hủy / đổi lịch trước giờ học ít nhất bao nhiêu giờ (application.properties)
     @Value("${app.booking.cancel-deadline-hours:24}")
     private long cancelDeadlineHours;
+
+    // Mentor phải dời lịch trước giờ học ít nhất bao nhiêu giờ (V26)
+    @Value("${app.booking.reschedule-deadline-hours:2}")
+    private long rescheduleDeadlineHours;
 
     // Nhắc trước giờ học bao nhiêu phút (USER_FLOWS 1.6: 30 phút)
     @Value("${app.booking.reminder-minutes-before:30}")
@@ -142,6 +154,129 @@ public class BookingServiceImpl implements BookingService {
     }
 
     @Override
+    @Transactional
+    public BookingResponse rescheduleByMentor(UUID mentorId, UUID bookingId, RescheduleBookingRequest request) {
+        // 1. Booking phải của mentor này và còn hiệu lực (chờ thanh toán gói hoặc đã xác nhận)
+        Booking booking = findBooking(bookingId);
+        if (!booking.getMentorId().equals(mentorId)) {
+            throw new AppException(ErrorCode.BOOKING_NOT_FOUND);
+        }
+        validateActive(booking);
+        MentorSchedule schedule = lockSlot(booking.getSchedule().getScheduleId());
+
+        // 2. Phải dời trước giờ học ít nhất rescheduleDeadlineHours giờ
+        if (UtcTimeUtil.nowUtc().isAfter(schedule.getStartTime().minusHours(rescheduleDeadlineHours))) {
+            throw new AppException(ErrorCode.BOOKING_RESCHEDULE_DEADLINE_PASSED,
+                    String.format(ErrorCode.BOOKING_RESCHEDULE_DEADLINE_PASSED.getMessage(), rescheduleDeadlineHours));
+        }
+
+        // 3. Giờ mới: giữ nguyên thời lượng (học phí không đổi), hợp lệ, không trùng lịch mentor / học viên
+        LocalDateTime oldStart = schedule.getStartTime();
+        LocalDateTime newStart = UtcTimeUtil.toUtc(request.getNewStartTime());
+        LocalDateTime newEnd = newStart.plus(Duration.between(oldStart, schedule.getEndTime()));
+        if (newStart.equals(oldStart)) {
+            throw new AppException(ErrorCode.BOOKING_RESCHEDULE_SAME_TIME);
+        }
+        sessionTimeValidator.validate(newStart, newEnd);
+        if (mentorScheduleRepository.existsByMentorIdAndScheduleIdNotAndStatusNotAndStartTimeLessThanAndEndTimeGreaterThan(
+                mentorId, schedule.getScheduleId(), ScheduleStatus.cancelled, newEnd, newStart)) {
+            throw new AppException(ErrorCode.SCHEDULE_TIME_CONFLICT, "Giờ mới trùng với lịch dạy khác của bạn");
+        }
+        if (bookingRepository.existsByStudentIdAndBookingIdNotAndStatusInAndSchedule_StartTimeLessThanAndSchedule_EndTimeGreaterThan(
+                booking.getStudentId(), bookingId, ACTIVE_STATUSES, newEnd, newStart)) {
+            throw new AppException(ErrorCode.SCHEDULE_TIME_CONFLICT, "Giờ mới trùng với lịch học khác của học viên");
+        }
+
+        // 4. Đổi giờ ngay trên buổi cũ, reset nhắc lịch để job nhắc lại theo giờ mới; yêu cầu xin dời (nếu có) đã xử lý
+        schedule.setStartTime(newStart);
+        schedule.setEndTime(newEnd);
+        booking.setReminderSentAt(null);
+        clearRescheduleRequest(booking);
+        mentorScheduleRepository.save(schedule);
+        bookingRepository.save(booking);
+        log.info("Mentor {} rescheduled booking {} from {} to {}", mentorId, bookingId, oldStart, newStart);
+
+        // 5. Báo học viên + mentor (giờ hiển thị theo giờ Việt Nam)
+        Map<UUID, String> names = new HashMap<>();
+        String message = "Mentor " + getFullName(mentorId, names) + " đã dời buổi kèm 1-1"
+                + (schedule.getTopic() != null ? " \"" + schedule.getTopic() + "\"" : "")
+                + " từ " + formatVn(oldStart) + " sang " + formatVn(newStart) + ".";
+        if (request.getReason() != null && !request.getReason().isBlank()) {
+            message += " Lý do: " + request.getReason().trim();
+        }
+        notifyBoth(booking, "Buổi học đã được dời lịch", message);
+        return toResponse(booking, names);
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse requestReschedule(UUID studentId, UUID bookingId, RescheduleRequestRequest request) {
+        // 1. Buổi của chính học viên, đã thanh toán (gói chưa thanh toán thì từ chối cả gói để mentor xếp lại)
+        Booking booking = findBooking(bookingId);
+        if (!booking.getStudentId().equals(studentId)) {
+            throw new AppException(ErrorCode.BOOKING_NOT_FOUND);
+        }
+        if (booking.getStatus() != BookingStatus.confirmed) {
+            throw new AppException(ErrorCode.BOOKING_STATUS_INVALID);
+        }
+        // 2. Cùng thời hạn với mentor dời lịch: mentor còn kịp xử lý
+        MentorSchedule schedule = booking.getSchedule();
+        if (UtcTimeUtil.nowUtc().isAfter(schedule.getStartTime().minusHours(rescheduleDeadlineHours))) {
+            throw new AppException(ErrorCode.BOOKING_RESCHEDULE_DEADLINE_PASSED,
+                    String.format(ErrorCode.BOOKING_RESCHEDULE_DEADLINE_PASSED.getMessage(), rescheduleDeadlineHours));
+        }
+        // 3. Giờ mong muốn (nếu có) phải là 1 buổi hợp lệ cùng thời lượng
+        LocalDateTime preferred = request.getPreferredStartTime() == null ? null
+                : UtcTimeUtil.toUtc(request.getPreferredStartTime());
+        if (preferred != null) {
+            sessionTimeValidator.validate(preferred,
+                    preferred.plus(Duration.between(schedule.getStartTime(), schedule.getEndTime())));
+        }
+
+        booking.setRescheduleRequestedAt(UtcTimeUtil.nowUtc());
+        booking.setReschedulePreferredTime(preferred);
+        booking.setRescheduleRequestNote(request.getNote().trim());
+        bookingRepository.save(booking);
+        log.info("Student {} requested reschedule for booking {}", studentId, bookingId);
+
+        // 4. Báo mentor (chỉ mentor, học viên là người gửi)
+        Map<UUID, String> names = new HashMap<>();
+        String message = "Học viên " + getFullName(studentId, names) + " xin dời buổi "
+                + formatVn(schedule.getStartTime())
+                + (preferred != null ? " sang " + formatVn(preferred) : "")
+                + ". Lý do: " + booking.getRescheduleRequestNote()
+                + ". Vào Lịch dạy để dời lịch hoặc từ chối.";
+        notificationService.notifyMentorSession(booking.getMentorId(), "Học viên xin dời lịch", message,
+                schedule.getScheduleId(), bookingId);
+        return toResponse(booking, names);
+    }
+
+    @Override
+    @Transactional
+    public BookingResponse rejectRescheduleRequest(UUID mentorId, UUID bookingId, String reason) {
+        Booking booking = findBooking(bookingId);
+        if (!booking.getMentorId().equals(mentorId)) {
+            throw new AppException(ErrorCode.BOOKING_NOT_FOUND);
+        }
+        if (booking.getRescheduleRequestedAt() == null) {
+            throw new AppException(ErrorCode.RESCHEDULE_REQUEST_NOT_FOUND);
+        }
+        clearRescheduleRequest(booking);
+        bookingRepository.save(booking);
+        log.info("Mentor {} rejected reschedule request of booking {}", mentorId, bookingId);
+
+        Map<UUID, String> names = new HashMap<>();
+        String message = "Mentor " + getFullName(mentorId, names) + " không dời được buổi "
+                + formatVn(booking.getSchedule().getStartTime()) + ", buổi học giữ nguyên giờ cũ.";
+        if (reason != null && !reason.isBlank()) {
+            message += " Lý do: " + reason.trim();
+        }
+        notificationService.notifyMentorSession(booking.getStudentId(), "Yêu cầu dời lịch bị từ chối", message,
+                booking.getSchedule().getScheduleId(), bookingId);
+        return toResponse(booking, names);
+    }
+
+    @Override
     @Transactional(readOnly = true)
     public PageResponse<BookingResponse> getStudentSchedule(UUID studentId, boolean past, Pageable pageable) {
         return findPage(BookingSpecification.forStudent(studentId, past, UtcTimeUtil.nowUtc()), pageable, past);
@@ -216,6 +351,17 @@ public class BookingServiceImpl implements BookingService {
         if (UtcTimeUtil.nowUtc().isAfter(deadline)) {
             throw new AppException(ErrorCode.BOOKING_CANCEL_DEADLINE_PASSED);
         }
+    }
+
+    // Giờ UTC trong DB -> "HH:mm dd/MM/yyyy" giờ Việt Nam để hiện trong thông báo
+    private static String formatVn(LocalDateTime utc) {
+        return UtcTimeUtil.toInstant(utc).atZone(VN_ZONE).format(VN_FORMAT);
+    }
+
+    private static void clearRescheduleRequest(Booking booking) {
+        booking.setRescheduleRequestedAt(null);
+        booking.setReschedulePreferredTime(null);
+        booking.setRescheduleRequestNote(null);
     }
 
     private String getReason(CancelBookingRequest request) {
@@ -321,10 +467,14 @@ public class BookingServiceImpl implements BookingService {
                 .endTime(UtcTimeUtil.toInstant(schedule.getEndTime()))
                 .price(schedule.getPrice())
                 .meetingUrl(schedule.getMeetingUrl())
+                .topic(schedule.getTopic())
                 .status(booking.getStatus() != null ? booking.getStatus().name() : null)
                 .cancelReason(booking.getCancelReason())
                 .cancelledAt(UtcTimeUtil.toInstant(booking.getCancelledAt()))
                 .rescheduledFromId(booking.getRescheduledFromId())
+                .rescheduleRequestedAt(UtcTimeUtil.toInstant(booking.getRescheduleRequestedAt()))
+                .reschedulePreferredTime(UtcTimeUtil.toInstant(booking.getReschedulePreferredTime()))
+                .rescheduleRequestNote(booking.getRescheduleRequestNote())
                 .createdAt(UtcTimeUtil.fromServerTime(booking.getCreatedAt()))
                 .paymentOrderCode(paymentOrderCode)
                 .build();

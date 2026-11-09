@@ -29,6 +29,9 @@ public interface CourseContentRepository extends JpaRepository<CourseContent, UU
     /** Nội dung con trực tiếp (dùng để xoá dọn cây khi xoá một nội dung cha). */
     List<CourseContent> findByParentContent_ContentId(UUID parentContentId);
 
+    /** Bài tập riêng của mentor (V27, course_id = NULL), mới nhất trước. */
+    List<CourseContent> findByOwnerMentorIdAndCourseIsNullOrderByCreatedAtDesc(UUID ownerMentorId);
+
     /**
      * Bài tập (homework) trỏ tới một đề thi.
      * <p>

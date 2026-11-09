@@ -22,6 +22,10 @@ public interface MentorScheduleRepository extends JpaRepository<MentorSchedule, 
     boolean existsByMentorIdAndStatusNotAndStartTimeLessThanAndEndTimeGreaterThan(
             UUID mentorId, ScheduleStatus status, LocalDateTime newEnd, LocalDateTime newStart);
 
+    // Giống trên nhưng bỏ qua chính buổi đang dời lịch (V26)
+    boolean existsByMentorIdAndScheduleIdNotAndStatusNotAndStartTimeLessThanAndEndTimeGreaterThan(
+            UUID mentorId, UUID scheduleId, ScheduleStatus status, LocalDateTime newEnd, LocalDateTime newStart);
+
     // Khóa dòng khi thanh toán / hủy / ghi nhận buổi học (TASK D5-07)
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<MentorSchedule> findWithLockByScheduleId(UUID scheduleId);

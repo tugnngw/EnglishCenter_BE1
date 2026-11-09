@@ -429,7 +429,9 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public CourseContentResponse updateContent(UUID contentId, UpdateCourseContentRequest request) {
+        // Bài tập riêng của mentor (V27, course = null) chỉ sửa / xóa qua /api/v1/mentor/homeworks
         CourseContent content = courseContentRepository.findById(contentId)
+                .filter(c -> c.getCourse() != null)
                 .orElseThrow(() -> new AppException(ErrorCode.COURSE_CONTENT_NOT_FOUND));
 
         UUID currentUserId = SecurityUtils.getCurrentUserId()
@@ -503,7 +505,9 @@ public class CourseServiceImpl implements CourseService {
     @Override
     @Transactional
     public void deleteContent(UUID contentId) {
+        // Bài tập riêng của mentor (V27, course = null) chỉ sửa / xóa qua /api/v1/mentor/homeworks
         CourseContent content = courseContentRepository.findById(contentId)
+                .filter(c -> c.getCourse() != null)
                 .orElseThrow(() -> new AppException(ErrorCode.COURSE_CONTENT_NOT_FOUND));
 
         UUID currentUserId = SecurityUtils.getCurrentUserId()

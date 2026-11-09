@@ -71,4 +71,8 @@ public class MentorSchedule extends BaseEntity {
 
     @Column(name = "meeting_url", length = 500)
     private String meetingUrl;
+
+    // Buổi này học gì - mentor ghi khi tạo gói, học viên xem trước khi thanh toán (V26)
+    @Column(name = "topic", length = 255)
+    private String topic;
 }

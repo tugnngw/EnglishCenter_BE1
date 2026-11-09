@@ -1,10 +1,12 @@
 package com.sba301.englishcenter.service.impl;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.ConsultationStatus;
 import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.NotificationType;
 import com.sba301.englishcenter.common.enums.RoleName;
+import com.sba301.englishcenter.dto.consultation.AvailableSlotData;
 import com.sba301.englishcenter.dto.request.CreateConsultationRequest;
 import com.sba301.englishcenter.dto.response.ConsultationResponse;
 import com.sba301.englishcenter.dto.response.StudentOverviewResponse;
@@ -21,6 +23,7 @@ import com.sba301.englishcenter.repository.StudentProfileRepository;
 import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.service.ConsultationService;
 import com.sba301.englishcenter.service.NotificationService;
+import com.sba301.englishcenter.util.JsonbMapper;
 import com.sba301.englishcenter.util.UtcTimeUtil;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +38,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -48,6 +53,8 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     private static final List<ConsultationStatus> OPEN_STATUSES = List.of(ConsultationStatus.pending, ConsultationStatus.contacted);
     private static final List<String> LEARNER_ROLES = List.of(RoleName.USER.getValue(), RoleName.STUDENT.getValue());
+    private static final TypeReference<List<AvailableSlotData>> SLOTS = new TypeReference<>() {
+    };
 
     private final ConsultationRequestRepository consultationRepository;
     private final UserRepository userRepository;
@@ -64,6 +71,7 @@ public class ConsultationServiceImpl implements ConsultationService {
         User student = findUser(studentId);
         String phone = request.getPhone().trim();
         String note = StringUtils.hasText(request.getNote()) ? request.getNote().trim() : null;
+        String slots = JsonbMapper.write(normalizeSlots(request.getAvailableSlots()));
 
         // SĐT chỉ hỏi khi cần tư vấn -> lưu luôn vào hồ sơ để mentor liên hệ
         student.setPhone(phone);
@@ -76,6 +84,7 @@ public class ConsultationServiceImpl implements ConsultationService {
             ConsultationRequest existing = open.get();
             existing.setPhone(phone);
             existing.setNote(note);
+            existing.setAvailableSlots(slots);
             return toResponse(consultationRepository.save(existing));
         }
 
@@ -83,6 +92,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                 .studentId(studentId)
                 .phone(phone)
                 .note(note)
+                .availableSlots(slots)
                 .status(ConsultationStatus.pending)
                 .build());
         log.info("Student {} requested consultation {}", studentId, saved.getRequestId());
@@ -182,6 +192,26 @@ public class ConsultationServiceImpl implements ConsultationService {
 
     // ===================== helpers =====================
 
+    /**
+     * Kiểm tra giờ kết thúc sau giờ bắt đầu, sắp xếp theo thứ trong tuần rồi giờ bắt đầu, bỏ khung trùng hệt nhau.
+     */
+    private static List<AvailableSlotData> normalizeSlots(List<AvailableSlotData> slots) {
+        for (AvailableSlotData slot : slots) {
+            if (!LocalTime.parse(slot.to()).isAfter(LocalTime.parse(slot.from()))) {
+                throw new AppException(ErrorCode.CONSULTATION_SLOT_INVALID);
+            }
+        }
+        return slots.stream()
+                .distinct()
+                .sorted(Comparator.comparing(AvailableSlotData::day).thenComparing(AvailableSlotData::from))
+                .toList();
+    }
+
+    /** Đọc lịch rảnh từ JSONB (trống thì danh sách rỗng). */
+    private static List<AvailableSlotData> readSlots(String json) {
+        return JsonbMapper.readList(json, SLOTS);
+    }
+
     private ConsultationRequest lock(UUID requestId) {
         return consultationRepository.findWithLockByRequestId(requestId)
                 .orElseThrow(() -> new AppException(ErrorCode.CONSULTATION_NOT_FOUND));
@@ -207,6 +237,7 @@ public class ConsultationServiceImpl implements ConsultationService {
     private StudentOverviewResponse toOverview(User user) {
         Optional<StudentProfile> profile = studentProfileRepository.findById(user.getUserId());
         UUID certId = profile.map(StudentProfile::getTargetCertificateId).orElse(null);
+        Optional<ConsultationRequest> latest = consultationRepository.findFirstByStudentIdOrderByCreatedAtDesc(user.getUserId());
         return StudentOverviewResponse.builder()
                 .userId(user.getUserId())
                 .fullName(user.getFullName())
@@ -219,8 +250,8 @@ public class ConsultationServiceImpl implements ConsultationService {
                 .currentLevel(profile.map(StudentProfile::getCurrentLevel).orElse(null))
                 .currentScore(profile.map(StudentProfile::getCurrentScore).orElse(null))
                 .levelTestCount(examAttemptRepository.countByStudent_UserIdAndExam_ExamScope(user.getUserId(), ExamScope.PRACTICE))
-                .consultationStatus(consultationRepository.findFirstByStudentIdOrderByCreatedAtDesc(user.getUserId())
-                        .map(c -> c.getStatus().name()).orElse(null))
+                .consultationStatus(latest.map(c -> c.getStatus().name()).orElse(null))
+                .availableSlots(latest.map(c -> readSlots(c.getAvailableSlots())).orElse(List.of()))
                 .build();
     }
 
@@ -237,6 +268,7 @@ public class ConsultationServiceImpl implements ConsultationService {
                 .studentEmail(student.getEmail())
                 .phone(request.getPhone())
                 .note(request.getNote())
+                .availableSlots(readSlots(request.getAvailableSlots()))
                 .status(request.getStatus().name())
                 .mentorId(request.getMentorId())
                 .mentorName(mentorName)

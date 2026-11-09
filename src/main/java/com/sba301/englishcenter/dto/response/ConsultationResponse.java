@@ -1,5 +1,6 @@
 package com.sba301.englishcenter.dto.response;
 
+import com.sba301.englishcenter.dto.consultation.AvailableSlotData;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -8,6 +9,7 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -26,6 +28,8 @@ public class ConsultationResponse {
     private String studentEmail;
     private String phone;
     private String note;
+    /** Lịch rảnh hằng tuần (giờ Việt Nam, "HH:mm"), rỗng nếu chưa gửi */
+    private List<AvailableSlotData> availableSlots;
     private String status;
     private UUID mentorId;
     private String mentorName;

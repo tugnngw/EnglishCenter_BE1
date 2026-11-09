@@ -5,6 +5,8 @@ import com.sba301.englishcenter.common.PageResponse;
 import com.sba301.englishcenter.common.enums.BookingStatus;
 import com.sba301.englishcenter.common.enums.RoleName;
 import com.sba301.englishcenter.dto.request.CancelBookingRequest;
+import com.sba301.englishcenter.dto.request.RescheduleBookingRequest;
+import com.sba301.englishcenter.dto.request.RescheduleRequestRequest;
 import com.sba301.englishcenter.dto.request.UpdateBookingStatusRequest;
 import com.sba301.englishcenter.dto.response.BookingResponse;
 import com.sba301.englishcenter.exception.AppException;
@@ -21,6 +23,7 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -69,6 +72,17 @@ public class BookingController {
         return bookingService.getStudentSchedule(currentUserId(), TYPE_PAST.equalsIgnoreCase(type), pageable);
     }
 
+    @PostMapping("/me/bookings/{bookingId}/reschedule-request")
+    @PreAuthorize("hasAnyRole('USER', 'STUDENT')")
+    @Operation(summary = "Học viên xin dời lịch 1 buổi",
+            description = "Buổi đã xác nhận, trước giờ học ít nhất 2 giờ; lý do bắt buộc, giờ mong muốn (UTC) tùy chọn; "
+                    + "gửi lại thì ghi đè; báo mentor")
+    public ApiResponse<BookingResponse> requestReschedule(
+            @PathVariable UUID bookingId,
+            @Valid @RequestBody RescheduleRequestRequest request) {
+        return ApiResponse.success(bookingService.requestReschedule(currentUserId(), bookingId, request));
+    }
+
     // ===================== MENTOR =====================
 
     @GetMapping("/mentor/schedule")
@@ -88,6 +102,26 @@ public class BookingController {
             @PathVariable UUID bookingId,
             @Valid @RequestBody UpdateBookingStatusRequest request) {
         return ApiResponse.success(bookingService.updateStatusByMentor(currentUserId(), bookingId, request));
+    }
+
+    @PutMapping("/mentor/bookings/{bookingId}/reschedule")
+    @PreAuthorize("hasRole('MENTOR')")
+    @Operation(summary = "Mentor dời lịch 1 buổi",
+            description = "Trước giờ học ít nhất 2 giờ; chỉ gửi newStartTime (UTC), giữ nguyên thời lượng; báo học viên")
+    public ApiResponse<BookingResponse> reschedule(
+            @PathVariable UUID bookingId,
+            @Valid @RequestBody RescheduleBookingRequest request) {
+        return ApiResponse.success(bookingService.rescheduleByMentor(currentUserId(), bookingId, request));
+    }
+
+    @PutMapping("/mentor/bookings/{bookingId}/reschedule-request/reject")
+    @PreAuthorize("hasRole('MENTOR')")
+    @Operation(summary = "Mentor từ chối yêu cầu dời lịch", description = "Buổi giữ nguyên giờ; báo học viên kèm lý do")
+    public ApiResponse<BookingResponse> rejectRescheduleRequest(
+            @PathVariable UUID bookingId,
+            @Valid @RequestBody(required = false) CancelBookingRequest request) {
+        return ApiResponse.success(bookingService.rejectRescheduleRequest(currentUserId(), bookingId,
+                request == null ? null : request.getReason()));
     }
 
     // ===================== ADMIN =====================

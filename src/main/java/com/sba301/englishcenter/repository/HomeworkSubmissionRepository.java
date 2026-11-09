@@ -33,6 +33,12 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
     /** Bài tập đã có ai nộp chưa: khóa sửa hình thức nộp / chặn xoá bài tập. */
     boolean existsByHomeworkContent_ContentId(UUID contentId);
 
+    /** Số bài nộp của 1 bài tập (trang Homework của mentor, V27). */
+    long countByHomeworkContent_ContentId(UUID contentId);
+
+    /** Học viên đã có bài nộp được chấm ĐẠT cho bài tập này (chặng HOMEWORK của lộ trình hoàn thành, V27). */
+    boolean existsByHomeworkContent_ContentIdAndStudent_UserIdAndPassedTrue(UUID contentId, UUID studentId);
+
     /**
      * Bài nộp CHƯA CHẤM của học viên mà CHƯA được gán mentor nào.
      * <p>
@@ -120,7 +126,8 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
      */
     @EntityGraph(attributePaths = {"homeworkContent", "homeworkContent.course", "student"})
     @Query("select s from HomeworkSubmission s "
-            + "left join s.homeworkContent.course.mentor m "
+            // Join tường minh từng bước: bài tập của mentor (V27) không có khóa học (course NULL) vẫn phải ra
+            + "left join s.homeworkContent hc left join hc.course c left join c.mentor m "
             + "where (s.assignedGraderId = :mentorId "
             + " or (s.assignedGraderId is null and (m.userId = :mentorId "
             + "   or exists (select 1 from MentoringPlan p "

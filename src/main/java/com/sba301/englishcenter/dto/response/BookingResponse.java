@@ -32,10 +32,16 @@ public class BookingResponse {
     private Instant endTime;
     private BigDecimal price;
     private String meetingUrl;
+    // Buổi này học gì (V26)
+    private String topic;
     private String status;
     private String cancelReason;
     private Instant cancelledAt;
     private UUID rescheduledFromId;
+    // Học viên xin dời lịch (V28): null = không có yêu cầu đang chờ
+    private Instant rescheduleRequestedAt;
+    private Instant reschedulePreferredTime;
+    private String rescheduleRequestNote;
     private Instant createdAt;
     // Mã đơn SePay đang chờ thanh toán (chỉ có khi status = pending). FE gọi GET /payments/orders/{code} để lấy QR
     private String paymentOrderCode;

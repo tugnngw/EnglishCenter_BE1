@@ -14,7 +14,7 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
- * 1 chặng trong lộ trình (TASK-D5-03). refId trỏ tới khóa học / đề thi / đề luyện tập tùy type.
+ * 1 chặng trong lộ trình (TASK-D5-03). refId trỏ tới khóa học / đề thi / đề luyện tập / bài tập của mentor (V27) tùy type.
  */
 @Getter
 @Setter
@@ -28,7 +28,7 @@ public class LearningPathItemRequest {
     @Min(value = 1, message = "Thứ tự phải từ 1")
     private Integer order;
 
-    @NotNull(message = "Loại chặng không được để trống (COURSE / EXAM / PRACTICE_EXAM)")
+    @NotNull(message = "Loại chặng không được để trống (COURSE / EXAM / PRACTICE_EXAM / HOMEWORK)")
     private LearningPathItemType type;
 
     @NotNull(message = "refId không được để trống")
