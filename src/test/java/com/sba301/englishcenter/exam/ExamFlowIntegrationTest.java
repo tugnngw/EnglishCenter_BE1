@@ -372,6 +372,18 @@ class ExamFlowIntegrationTest {
         assertThat((Object) ielts.read("$.result.parts[0].properties.maxScore")).isEqualTo(9);
         assertThat(ielts.body()).doesNotContain("nodeType");
 
+        // Giới hạn đề cho form tạo đề: theo thời gian thi thật của chứng chỉ (IELTS 165), Quiz tối đa 60
+        String rules = "/api/v1/admin/exams/rules?certificateId=d3000000-0000-4000-8000-000000000001&examType=";
+        Response finalRules = call(get(rules + "final"), admin, null);
+        assertThat(finalRules.status()).as(finalRules.body()).isEqualTo(200);
+        assertThat((Integer) finalRules.read("$.result.minDurationMinutes")).isEqualTo(15);
+        assertThat((Integer) finalRules.read("$.result.maxDurationMinutes")).isEqualTo(165);
+        assertThat((Integer) finalRules.read("$.result.minDescriptionLength")).isEqualTo(30);
+        assertThat((Integer) call(get(rules + "quiz"), admin, null).read("$.result.maxDurationMinutes")).isEqualTo(60);
+        assertThat((Integer) call(get("/api/v1/admin/exams/rules?examType=final"), admin, null)
+                .read("$.result.maxDurationMinutes")).isEqualTo(180);
+        assertThat(call(get(rules + "final"), student, null).status()).isEqualTo(403);
+
         // Đề khóa học: chưa có enrollment -> 5008; có enrollment active -> Quiz làm được, Giữa kỳ mở khi đạt Quiz
         String quiz = "d3000000-0000-4000-8000-000000000200";
         String midterm = "d3000000-0000-4000-8000-000000000100";

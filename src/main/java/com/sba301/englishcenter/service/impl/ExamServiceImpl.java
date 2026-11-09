@@ -9,6 +9,7 @@ import com.sba301.englishcenter.common.enums.RoleName;
 import com.sba301.englishcenter.dto.request.CreateExamRequest;
 import com.sba301.englishcenter.dto.request.UpdateExamRequest;
 import com.sba301.englishcenter.dto.response.ExamDetailResponse;
+import com.sba301.englishcenter.dto.response.ExamRulesResponse;
 import com.sba301.englishcenter.dto.response.ExamSummaryResponse;
 import com.sba301.englishcenter.entity.Certificate;
 import com.sba301.englishcenter.entity.CertificatePart;
@@ -580,7 +581,7 @@ public class ExamServiceImpl implements ExamService {
 
     /**
      * Thời gian thi thật của từng chứng chỉ (phút), theo preset trong certificates.description.scoring.
-     * Giữa kỳ / Cuối kỳ / Kiểm tra đầu vào không dài hơn đề thi thật. Khớp FE CreateExamModal.FULL_TEST_MINUTES.
+     * Giữa kỳ / Cuối kỳ không dài hơn đề thi thật. FE lấy qua GET /api/v1/admin/exams/rules, không chép lại.
      */
     static final Map<String, Integer> FULL_TEST_MINUTES = Map.of(
             "IELTS", 165,
@@ -592,18 +593,40 @@ public class ExamServiceImpl implements ExamService {
             "VSTEP", 172,
             "APTIS", 180);
 
+    static int fullTestMinutes(String preset) {
+        return preset == null ? DEFAULT_FULL_TEST_MINUTES
+                : FULL_TEST_MINUTES.getOrDefault(preset, DEFAULT_FULL_TEST_MINUTES);
+    }
+
     /** Thời lượng tối đa của đề theo loại đề + chứng chỉ của đề. */
     static int maxDurationMinutes(ExamType type, String preset) {
-        int fullTest = preset == null ? DEFAULT_FULL_TEST_MINUTES
-                : FULL_TEST_MINUTES.getOrDefault(preset, DEFAULT_FULL_TEST_MINUTES);
+        int fullTest = fullTestMinutes(preset);
         return type == ExamType.QUIZ ? Math.min(MAX_QUIZ_MINUTES, fullTest) : fullTest;
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public ExamRulesResponse getExamRules(UUID certificateId, ExamType examType) {
+        Certificate certificate = certificateId == null ? null : certificateRepository.findById(certificateId)
+                .orElseThrow(() -> new AppException(ErrorCode.CERTIFICATE_NOT_FOUND));
+        String preset = scoringPreset(certificate);
+        return ExamRulesResponse.builder()
+                .minDurationMinutes(MIN_DURATION_MINUTES)
+                .maxDurationMinutes(maxDurationMinutes(examType, preset))
+                .fullTestMinutes(fullTestMinutes(preset))
+                .minDescriptionLength(MIN_DESCRIPTION_LENGTH)
+                .build();
+    }
+
     private static String scoringPreset(Exam exam) {
-        if (exam.getCertificate() == null) {
+        return scoringPreset(exam.getCertificate());
+    }
+
+    private static String scoringPreset(Certificate certificate) {
+        if (certificate == null) {
             return null;
         }
-        JsonNode root = JsonUtil.parse(exam.getCertificate().getDescription());
+        JsonNode root = JsonUtil.parse(certificate.getDescription());
         String preset = root == null ? null : root.path("scoring").path("preset").asText(null);
         return preset == null || preset.isBlank() ? null : preset.trim().toUpperCase(Locale.ROOT);
     }

@@ -8,6 +8,7 @@ import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.dto.request.CreateExamRequest;
 import com.sba301.englishcenter.dto.request.UpdateExamRequest;
 import com.sba301.englishcenter.dto.response.ExamDetailResponse;
+import com.sba301.englishcenter.dto.response.ExamRulesResponse;
 import com.sba301.englishcenter.dto.response.ExamSummaryResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -39,6 +40,9 @@ public interface ExamService {
     void deleteExam(UUID examId);
 
     ExamDetailResponse publishExam(UUID examId);
+
+    /** Giới hạn khi tạo / sửa đề theo chứng chỉ + loại đề (thời lượng, độ dài mô tả) - cho form của FE. */
+    ExamRulesResponse getExamRules(UUID certificateId, ExamType examType);
 
     ExamDetailResponse unpublishExam(UUID examId);
 

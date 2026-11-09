@@ -10,6 +10,7 @@ import com.sba301.englishcenter.dto.request.UpdateExamQuestionRequest;
 import com.sba301.englishcenter.dto.request.UpdateExamRequest;
 import com.sba301.englishcenter.dto.request.UpdateExamSectionRequest;
 import com.sba301.englishcenter.dto.response.ExamDetailResponse;
+import com.sba301.englishcenter.dto.response.ExamRulesResponse;
 import com.sba301.englishcenter.dto.response.ExamQuestionResponse;
 import com.sba301.englishcenter.dto.response.ExamSectionResponse;
 import com.sba301.englishcenter.dto.response.ExamSummaryResponse;
@@ -75,6 +76,14 @@ public class AdminExamController {
             + "course requires courseId")
     public ApiResponse<ExamDetailResponse> createExam(@Valid @RequestBody CreateExamRequest request) {
         return ApiResponse.success("Tạo đề thi thành công", examService.createExam(request));
+    }
+
+    @GetMapping("/exams/rules")
+    @Operation(summary = "Exam rules", description = "Duration range and minimum description length for a "
+            + "certificate + exam type (create / edit exam form)")
+    public ApiResponse<ExamRulesResponse> getExamRules(@RequestParam(required = false) UUID certificateId,
+                                                       @RequestParam(required = false) String examType) {
+        return ApiResponse.success(examService.getExamRules(certificateId, ExamParams.examType(examType)));
     }
 
     @GetMapping("/exams/{examId}")
