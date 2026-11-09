@@ -404,11 +404,12 @@ public class AuthServiceImpl implements AuthService {
     /** Gửi email kích hoạt; báo lỗi nếu provider từ chối để tránh báo thành công giả. */
     private void sendActivationEmail(User user, String rawToken) {
         String link = appProperties.getFrontend().getBaseUrl() + "/activate?token=" + rawToken;
+        log.info("ACCOUNT ACTIVATION LINK for {}: {}", user.getEmail(), link);
         try {
             emailService.sendAccountActivationEmail(user.getEmail(), user.getFullName(), link);
         } catch (Exception e) {
             log.warn("Failed to send activation email to {}: {}", user.getEmail(), e.getMessage());
-            throw new IllegalStateException("Không gửi được email kích hoạt. Hãy kiểm tra cấu hình dịch vụ email.", e);
+            throw new AppException(ErrorCode.EMAIL_SEND_FAILED);
         }
     }
 

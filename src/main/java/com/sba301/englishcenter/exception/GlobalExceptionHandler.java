@@ -81,6 +81,14 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(errorCode.getCode(), errorCode.getMessage()));
     }
 
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalState(IllegalStateException ex) {
+        log.error("Illegal state exception: ", ex);
+        return ResponseEntity
+                .badRequest()
+                .body(ApiResponse.error(ErrorCode.UNCATEGORIZED_EXCEPTION.getCode(), ex.getMessage()));
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleUncaught(Exception ex) {
         log.error("Uncaught exception: ", ex);

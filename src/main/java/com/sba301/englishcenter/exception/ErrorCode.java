@@ -33,6 +33,7 @@ public enum ErrorCode {
 
     // === Email activation ===
     ACTIVATION_TOKEN_INVALID(1013, "Đường link kích hoạt không hợp lệ hoặc đã hết hạn", HttpStatus.BAD_REQUEST),
+    EMAIL_SEND_FAILED(1014, "Không gửi được email kích hoạt. Hãy kiểm tra cấu hình dịch vụ email.", HttpStatus.INTERNAL_SERVER_ERROR),
 
     // === Auth - Password Management ===
     NEW_PASSWORD_SAME_AS_OLD(2015, "Mật khẩu mới không được trùng mật khẩu cũ", HttpStatus.BAD_REQUEST),
