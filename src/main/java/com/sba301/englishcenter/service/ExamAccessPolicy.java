@@ -27,9 +27,7 @@ import java.util.UUID;
  *     <li>Đề {@code course}: học viên phải có enrollment của khóa học - hỏi qua
  *     {@link SessionEnrollmentChecker} (gọi EnrollmentService của Dev 4); thi nối tiếp: giữa kỳ cần đạt hết quiz,
  *     cuối kỳ cần đạt giữa kỳ và đạt đủ bài tập của khóa. Bước trước chỉ còn chờ chấm thì báo "đang chờ chấm";</li>
- *     <li>Đề {@code trial} trả phí ({@code is_free = false}): cần giao dịch {@code trial_exam_access}
- *     thành công trong {@code payment_transactions} (bảng của Dev 4, chỉ đọc bằng native query nên không
- *     tạo entity trùng với Dev 4).</li>
+ *     <li>Đề {@code trial} (kiểm tra đầu vào / thi thử) đã bỏ: đề cũ còn trong DB không làm được nữa.</li>
  * </ol>
  * Danh sách đề dùng {@link #session} để mỗi khóa chỉ truy vấn một lần cho cả trang.
  */
@@ -113,8 +111,8 @@ public class ExamAccessPolicy {
                 }
                 return checkPrerequisites(courseId, exam.getExamType());
             }
-            if (Boolean.FALSE.equals(exam.getIsFree()) && !hasPaidTrialAccess(userId, exam.getExamId())) {
-                return Optional.of(Denial.of(ErrorCode.EXAM_PAYMENT_REQUIRED));
+            if (exam.getExamScope() == ExamScope.TRIAL) {
+                return Optional.of(Denial.of(ErrorCode.EXAM_NOT_AVAILABLE));
             }
             return Optional.empty();
         }
@@ -245,16 +243,5 @@ public class ExamAccessPolicy {
 
     private static long asLong(Object value) {
         return value == null ? 0 : ((Number) value).longValue();
-    }
-
-    boolean hasPaidTrialAccess(UUID userId, UUID examId) {
-        Number count = (Number) entityManager.createNativeQuery(
-                        "SELECT COUNT(*) FROM payment_transactions "
-                                + "WHERE student_id = :studentId AND exam_id = :examId "
-                                + "AND transaction_type = 'trial_exam_access' AND transaction_status = 'success'")
-                .setParameter("studentId", userId)
-                .setParameter("examId", examId)
-                .getSingleResult();
-        return count != null && count.longValue() > 0;
     }
 }

@@ -2,6 +2,8 @@ package com.sba301.englishcenter.exam;
 
 import com.sba301.englishcenter.common.enums.AttemptStatus;
 import com.sba301.englishcenter.common.enums.ExamScope;
+import com.sba301.englishcenter.common.enums.ExamType;
+import com.sba301.englishcenter.entity.Course;
 import com.sba301.englishcenter.common.enums.ExamStatus;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.entity.Exam;
@@ -31,7 +33,10 @@ public final class ExamTestData {
     public static Exam publishedExam() {
         return Exam.builder()
                 .examId(UUID.randomUUID())
-                .examScope(ExamScope.TRIAL)
+                // Đề thi thử đã bỏ: đề mẫu là Quiz của một khóa học (test tự giả lập enrollment)
+                .examScope(ExamScope.COURSE)
+                .examType(ExamType.QUIZ)
+                .course(Course.builder().courseId(UUID.randomUUID()).build())
                 .examTitle("Sample exam")
                 .durationMinutes(30)
                 .maxAttempts(2)

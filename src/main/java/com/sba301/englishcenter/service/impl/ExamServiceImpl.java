@@ -16,6 +16,8 @@ import com.sba301.englishcenter.entity.Course;
 import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamQuestion;
 import com.sba301.englishcenter.entity.ExamSection;
+import com.sba301.englishcenter.util.JsonUtil;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.sba301.englishcenter.entity.Question;
 import com.sba301.englishcenter.entity.QuestionOption;
 import com.sba301.englishcenter.entity.User;
@@ -178,6 +180,7 @@ public class ExamServiceImpl implements ExamService {
                 request.getAvailableFrom(), request.getAvailableUntil());
         validateWindow(exam);
         validateTypeAndDescription(exam);
+        validateDuration(exam);
 
         exam = examRepository.save(exam);
         log.info("Admin {} tạo đề thi {} ({})", adminId, exam.getExamId(), exam.getExamScope());
@@ -230,6 +233,10 @@ public class ExamServiceImpl implements ExamService {
         if (request.getDescription() != null) {
             validateDescription(exam);
         }
+        // Đổi thời lượng hoặc loại đề thì thời lượng phải hợp với loại đề
+        if (request.getDurationMinutes() != null || request.getExamType() != null) {
+            validateDuration(exam);
+        }
 
         exam = examRepository.save(exam);
         log.info("Cập nhật đề thi {}", examId);
@@ -243,7 +250,7 @@ public class ExamServiceImpl implements ExamService {
         // exam_attempts có FK ON DELETE CASCADE: xóa đề sẽ xóa luôn lịch sử thi của học viên -> chặn
         if (attemptRepository.existsByExam_ExamId(examId)) {
             throw new AppException(ErrorCode.EXAM_HAS_ATTEMPTS,
-                    "Đề thi đã có lượt thi, hãy dùng unpublish thay vì xóa");
+                    "Đề đã có lượt thi nên không xóa được (giữ lịch sử làm bài). Hãy chọn Lưu trữ để ẩn đề");
         }
         examRepository.delete(exam);
         log.info("Đã xóa đề thi {}", examId);
@@ -259,6 +266,8 @@ public class ExamServiceImpl implements ExamService {
             throw new AppException(ErrorCode.EXAM_INVALID_FOR_PUBLISH, "Đề thi chưa có câu hỏi nào");
         }
         validateTypeAndDescription(exam);
+        validateDuration(exam);
+        validateDurationForContent(exam, examQuestions.size());
         for (ExamQuestion eq : examQuestions) {
             Question q = eq.getQuestion();
             try {
@@ -541,21 +550,103 @@ public class ExamServiceImpl implements ExamService {
     }
 
     /**
-     * Thi thử (trial) chỉ dùng cho kiểm tra đầu vào - đề thi thử đầy đủ nằm ở Luyện tập AI (practice).
-     * Quiz / giữa kỳ / cuối kỳ là đề đầu ra của khóa học, bắt buộc thuộc một khóa (course).
+     * Đề thi thử / kiểm tra đầu vào (trial) đã bỏ - thi thử đầy đủ nằm ở Luyện tập AI (practice).
+     * Đề ở đây là đề đầu ra của khóa học: Quiz / giữa kỳ / cuối kỳ, bắt buộc thuộc một khóa (course).
      */
     private void validateType(Exam exam) {
         ExamType type = exam.getExamType();
-        if (exam.getExamScope() == ExamScope.TRIAL && type != ExamType.PLACEMENT_TEST) {
+        if (exam.getExamScope() == ExamScope.TRIAL) {
             throw new AppException(ErrorCode.EXAM_TYPE_SCOPE_MISMATCH,
-                    "Đề thi thử chứng chỉ chỉ dùng cho Kiểm tra đầu vào. Quiz / giữa kỳ / cuối kỳ phải thuộc một "
-                            + "khóa học; thi thử đầy đủ tạo ở Luyện tập AI");
+                    "Đề kiểm tra đầu vào / thi thử không còn dùng: đề phải thuộc một khóa học (Quiz / Giữa kỳ / "
+                            + "Cuối kỳ). Thi thử đầy đủ tạo ở Luyện tập AI");
         }
         if (exam.getExamScope() == ExamScope.COURSE && (type == null || type == ExamType.PLACEMENT_TEST)) {
             throw new AppException(ErrorCode.EXAM_TYPE_SCOPE_MISMATCH,
                     "Đề của khóa học phải là Quiz, Giữa kỳ hoặc Cuối kỳ");
         }
     }
+
+    /** Đề ngắn nhất (phút) - dưới mức này học viên không kịp đọc đề. */
+    static final int MIN_DURATION_MINUTES = 15;
+
+    /** Quiz là bài kiểm tra ngắn sau mỗi unit - tối đa 60 phút (và không quá thời gian thi thật của chứng chỉ). */
+    static final int MAX_QUIZ_MINUTES = 60;
+
+    /** Khi công khai: tối thiểu 30 giây cho mỗi câu hỏi. */
+    static final int MIN_SECONDS_PER_QUESTION = 30;
+
+    /** Chứng chỉ chưa có preset (CEFR, thang 100, tùy chỉnh). */
+    static final int DEFAULT_FULL_TEST_MINUTES = 180;
+
+    /**
+     * Thời gian thi thật của từng chứng chỉ (phút), theo preset trong certificates.description.scoring.
+     * Giữa kỳ / Cuối kỳ / Kiểm tra đầu vào không dài hơn đề thi thật. Khớp FE CreateExamModal.FULL_TEST_MINUTES.
+     */
+    static final Map<String, Integer> FULL_TEST_MINUTES = Map.of(
+            "IELTS", 165,
+            "TOEIC_LR", 120,
+            "TOEIC_SW", 80,
+            "TOEFL", 120,
+            "TOEFL_OLD", 120,
+            "TOEFL_NEW", 90,
+            "VSTEP", 172,
+            "APTIS", 180);
+
+    /** Thời lượng tối đa của đề theo loại đề + chứng chỉ của đề. */
+    static int maxDurationMinutes(ExamType type, String preset) {
+        int fullTest = preset == null ? DEFAULT_FULL_TEST_MINUTES
+                : FULL_TEST_MINUTES.getOrDefault(preset, DEFAULT_FULL_TEST_MINUTES);
+        return type == ExamType.QUIZ ? Math.min(MAX_QUIZ_MINUTES, fullTest) : fullTest;
+    }
+
+    private static String scoringPreset(Exam exam) {
+        if (exam.getCertificate() == null) {
+            return null;
+        }
+        JsonNode root = JsonUtil.parse(exam.getCertificate().getDescription());
+        String preset = root == null ? null : root.path("scoring").path("preset").asText(null);
+        return preset == null || preset.isBlank() ? null : preset.trim().toUpperCase(Locale.ROOT);
+    }
+
+    private void validateDuration(Exam exam) {
+        if (exam.getExamScope() == ExamScope.PRACTICE || exam.getExamType() == null) {
+            return;
+        }
+        int max = maxDurationMinutes(exam.getExamType(), scoringPreset(exam));
+        Integer minutes = exam.getDurationMinutes();
+        if (minutes == null || minutes < MIN_DURATION_MINUTES || minutes > max) {
+            String certificate = exam.getCertificate() != null ? " " + exam.getCertificate().getCertificateName() : "";
+            throw new AppException(ErrorCode.EXAM_DURATION_OUT_OF_RANGE,
+                    "Thời lượng đề " + EXAM_TYPE_LABEL.get(exam.getExamType()) + certificate + " phải từ "
+                            + MIN_DURATION_MINUTES + " đến " + max + " phút");
+        }
+    }
+
+    /** Khi công khai: đủ thời gian cho số câu, và tổng thời lượng các phần thi không vượt thời lượng cả đề. */
+    private void validateDurationForContent(Exam exam, int questionCount) {
+        if (exam.getExamScope() == ExamScope.PRACTICE || exam.getDurationMinutes() == null) {
+            return;
+        }
+        int neededMinutes = (int) Math.ceil(questionCount * MIN_SECONDS_PER_QUESTION / 60.0);
+        if (exam.getDurationMinutes() < neededMinutes) {
+            throw new AppException(ErrorCode.EXAM_DURATION_TOO_SHORT, "Đề có " + questionCount
+                    + " câu, cần ít nhất " + neededMinutes + " phút (tối thiểu " + MIN_SECONDS_PER_QUESTION
+                    + " giây mỗi câu)");
+        }
+        int sectionMinutes = sectionRepository.findByExam_ExamIdOrderBySectionOrderAscCreatedAtAsc(exam.getExamId())
+                .stream().map(ExamSection::getDurationMinutes).filter(Objects::nonNull)
+                .mapToInt(Integer::intValue).sum();
+        if (sectionMinutes > exam.getDurationMinutes()) {
+            throw new AppException(ErrorCode.EXAM_DURATION_TOO_SHORT, "Tổng thời lượng các phần thi ("
+                    + sectionMinutes + " phút) vượt thời lượng cả đề (" + exam.getDurationMinutes() + " phút)");
+        }
+    }
+
+    private static final Map<ExamType, String> EXAM_TYPE_LABEL = Map.of(
+            ExamType.QUIZ, "Quiz",
+            ExamType.MIDTERM, "Giữa kỳ",
+            ExamType.FINAL, "Cuối kỳ",
+            ExamType.PLACEMENT_TEST, "Kiểm tra đầu vào");
 
     private void validateDescription(Exam exam) {
         if (exam.getExamScope() == ExamScope.PRACTICE) {

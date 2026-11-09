@@ -5,6 +5,7 @@ import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.entity.ExamAnswer;
 import com.sba301.englishcenter.entity.ExamAttempt;
 import com.sba301.englishcenter.entity.ExamQuestion;
+import com.sba301.englishcenter.entity.ExamSection;
 import com.sba301.englishcenter.entity.Question;
 import com.sba301.englishcenter.entity.QuestionOption;
 import com.sba301.englishcenter.util.JsonUtil;
@@ -16,6 +17,7 @@ import java.math.RoundingMode;
 import java.text.Normalizer;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -111,15 +113,21 @@ public class ExamGrader {
         int incorrect = 0;
         int unanswered = 0;
         boolean pending = false;
+        // Điểm theo từng kỹ năng (phần thi của chứng chỉ): [điểm đạt được, điểm tối đa]
+        Map<String, BigDecimal[]> bySkill = new LinkedHashMap<>();
 
         for (ExamQuestion eq : examQuestions) {
             Question question = eq.getQuestion();
             ExamAnswer answer = answers.get(question.getQuestionId());
             computedMax = computedMax.add(points(question));
+            BigDecimal[] skill = bySkill.computeIfAbsent(skillKey(eq), k -> new BigDecimal[]{BigDecimal.ZERO,
+                    BigDecimal.ZERO});
+            skill[1] = skill[1].add(points(question));
 
             if (answer != null) {
                 gradeAnswer(question, answer);
                 score = score.add(answer.getEarnedScore());
+                skill[0] = skill[0].add(answer.getEarnedScore());
             }
             if (!isAnswered(question, answer)) {
                 unanswered++;
@@ -138,7 +146,7 @@ public class ExamGrader {
                 ? attempt.getMaxScore() : computedMax;
         BigDecimal percentage = percentage(score, maxScore);
         BigDecimal threshold = passingScore != null ? passingScore : BigDecimal.ZERO;
-        boolean passed = !pending && percentage.compareTo(threshold) >= 0;
+        boolean passed = !pending && passPercentage(bySkill, percentage).compareTo(threshold) >= 0;
 
         attempt.setScore(score);
         attempt.setMaxScore(maxScore);
@@ -148,6 +156,36 @@ public class ExamGrader {
         attempt.setPassed(passed);
 
         return new Summary(score, maxScore, percentage, correct, incorrect, unanswered, pending, passed);
+    }
+
+    /**
+     * % dùng để xét đạt: đề có nhiều kỹ năng thì lấy trung bình % các kỹ năng (mỗi kỹ năng ngang nhau, giống cách
+     * ra điểm tổng của chứng chỉ - VD band Overall IELTS), để số điểm đặt cho từng câu chỉ là trọng số trong kỹ năng
+     * đó. Đề chỉ có một nhóm câu thì dùng % tổng như cũ.
+     */
+    static BigDecimal passPercentage(Map<String, BigDecimal[]> bySkill, BigDecimal overall) {
+        List<BigDecimal> skills = bySkill.values().stream()
+                .filter(v -> v[1].signum() > 0)
+                .map(v -> percentage(v[0], v[1]))
+                .toList();
+        if (skills.size() < 2) {
+            return overall;
+        }
+        return skills.stream().reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(BigDecimal.valueOf(skills.size()), 2, RoundingMode.HALF_UP);
+    }
+
+    /** Kỹ năng của câu: theo phần thi của chứng chỉ, không có thì theo loại section; câu ngoài section = một nhóm. */
+    private static String skillKey(ExamQuestion eq) {
+        ExamSection section = eq.getSection();
+        if (section == null) {
+            return "none";
+        }
+        if (section.getCertificatePart() != null) {
+            return "part:" + section.getCertificatePart().getPartId();
+        }
+        return "type:" + (section.getSectionType() == null ? "GENERAL"
+                : section.getSectionType().trim().toUpperCase(Locale.ROOT));
     }
 
     public static BigDecimal percentage(BigDecimal score, BigDecimal maxScore) {

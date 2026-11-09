@@ -4,6 +4,8 @@ import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.entity.Exam;
 import com.sba301.englishcenter.entity.ExamAnswer;
 import com.sba301.englishcenter.entity.ExamAttempt;
+import com.sba301.englishcenter.entity.ExamQuestion;
+import com.sba301.englishcenter.entity.ExamSection;
 import com.sba301.englishcenter.entity.Question;
 import com.sba301.englishcenter.service.ExamGrader;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,11 +14,13 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import static com.sba301.englishcenter.exam.ExamTestData.answer;
 import static com.sba301.englishcenter.exam.ExamTestData.correctOption;
+import static com.sba301.englishcenter.exam.ExamTestData.examQuestion;
 import static com.sba301.englishcenter.exam.ExamTestData.examQuestions;
 import static com.sba301.englishcenter.exam.ExamTestData.question;
 import static com.sba301.englishcenter.exam.ExamTestData.wrongOption;
@@ -121,5 +125,30 @@ class ExamGraderTest {
         assertThat(s.incorrect()).isEqualTo(1);
         assertThat(s.unanswered()).isEqualTo(1);
         assertThat(s.passed()).isFalse();
+    }
+
+    /** Đạt / trượt theo trung bình % các kỹ năng (giống band Overall), không theo tổng điểm thô. */
+    @Test
+    void grade_passUsesAverageOfSkills() {
+        Question mc = question(QuestionType.MULTIPLE_CHOICE, "1", "*A", "B");
+        Question essay = question(QuestionType.ESSAY, "9");
+        ExamSection reading = ExamSection.builder().sectionId(UUID.randomUUID()).sectionType("READING").build();
+        ExamSection writing = ExamSection.builder().sectionId(UUID.randomUUID()).sectionType("WRITING").build();
+        ExamQuestion readingQuestion = examQuestion(exam, mc, 1);
+        readingQuestion.setSection(reading);
+        ExamQuestion writingQuestion = examQuestion(exam, essay, 2);
+        writingQuestion.setSection(writing);
+        Map<UUID, ExamAnswer> answers = new HashMap<>();
+        answers.put(mc.getQuestionId(), answer(attempt, mc, correctOption(mc), null));
+        ExamAnswer essayAnswer = answer(attempt, essay, null, "My essay");
+        essayAnswer.setManualScore(new BigDecimal("3"));
+        answers.put(essay.getQuestionId(), essayAnswer);
+
+        ExamGrader.Summary s = grader.grade(attempt, List.of(readingQuestion, writingQuestion), answers,
+                new BigDecimal("50"));
+
+        // Tổng thô 4/10 = 40% nhưng Reading 100%, Writing 33% -> trung bình 66.5% -> đạt
+        assertThat(s.percentage()).isEqualByComparingTo("40.00");
+        assertThat(s.passed()).isTrue();
     }
 }

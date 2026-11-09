@@ -90,7 +90,7 @@ public class ExamSpecification {
      * Đề học viên được thấy trong danh sách:
      * <ul>
      *     <li>đề khóa học (course): chỉ khi đang ghi danh (active) khóa đó;</li>
-     *     <li>đề thi thử (trial): chỉ đề kiểm tra đầu vào (đề cũ lỡ đặt loại khác bị ẩn);</li>
+     *     <li>đề thi thử / kiểm tra đầu vào (trial): đã bỏ, không hiện nữa;</li>
      *     <li>đề luyện tập AI (practice): giữ nguyên cách lọc của trang Luyện tập AI.</li>
      * </ul>
      *
@@ -98,11 +98,9 @@ public class ExamSpecification {
      */
     public static Specification<Exam> visibleToStudent(UUID userId) {
         return (root, query, cb) -> {
-            Predicate trial = cb.and(cb.equal(root.get("examScope"), ExamScope.TRIAL),
-                    cb.equal(cb.concat(root.get("examType"), ""), ExamType.PLACEMENT_TEST.getValue()));
             Predicate practice = cb.equal(root.get("examScope"), ExamScope.PRACTICE);
             if (userId == null) {
-                return cb.or(trial, practice);
+                return practice;
             }
             Subquery<Integer> enrolled = query.subquery(Integer.class);
             Root<Enrollment> enrollment = enrolled.from(Enrollment.class);
@@ -111,7 +109,7 @@ public class ExamSpecification {
                     cb.equal(enrollment.get("course"), root.get("course")),
                     cb.equal(enrollment.get("status"), Enrollment.Status.active));
             Predicate course = cb.and(cb.equal(root.get("examScope"), ExamScope.COURSE), cb.exists(enrolled));
-            return cb.or(trial, practice, course);
+            return cb.or(practice, course);
         };
     }
 }

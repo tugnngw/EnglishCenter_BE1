@@ -66,6 +66,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -117,6 +118,8 @@ class ExamAttemptServiceImplTest {
         fillBlank = question(QuestionType.FILL_BLANK, "2", "went");
         examQuestions = ExamTestData.examQuestions(exam, mc, fillBlank);
 
+        // Đề mẫu là đề khóa học: mặc định học viên đã ghi danh (test riêng tự đổi sang chưa ghi danh)
+        lenient().when(enrollmentChecker.isEnrolled(any(), any())).thenReturn(true);
         when(examRepository.findById(exam.getExamId())).thenReturn(Optional.of(exam));
         when(examQuestionRepository.findDetailedByExamId(exam.getExamId())).thenReturn(examQuestions);
         when(sectionRepository.findByExam_ExamIdOrderBySectionOrderAscCreatedAtAsc(any())).thenReturn(List.of());

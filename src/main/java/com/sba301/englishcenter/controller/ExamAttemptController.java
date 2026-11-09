@@ -7,9 +7,7 @@ import com.sba301.englishcenter.dto.request.SubmitAttemptRequest;
 import com.sba301.englishcenter.dto.response.AttemptDetailResponse;
 import com.sba301.englishcenter.dto.response.AttemptResultResponse;
 import com.sba301.englishcenter.dto.response.AttemptSummaryResponse;
-import com.sba301.englishcenter.dto.response.ProficiencyResponse;
 import com.sba301.englishcenter.service.ExamAttemptService;
-import com.sba301.englishcenter.service.ProficiencyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -37,7 +35,6 @@ import java.util.UUID;
 @Tag(name = "Student - Exam attempt", description = "Taking an exam, autosave, submit, history and results")
 public class ExamAttemptController {
 
-    private final ProficiencyService proficiencyService;
     private final ExamAttemptService attemptService;
 
     @GetMapping("/attempts/{attemptId}")
@@ -79,15 +76,6 @@ public class ExamAttemptController {
             @RequestParam(required = false) String examScope,
             @PageableDefault(size = 20, sort = "startTime", direction = Sort.Direction.DESC) Pageable pageable) {
         return attemptService.getMyAttempts(examId, ExamParams.scope(examScope), pageable);
-    }
-
-    @GetMapping("/me/proficiency")
-    @Operation(summary = "My proficiency", description = "Current level per certificate from the latest submitted "
-            + "placement test (trial exam of type placement_test): percentage per section with its certificate part. "
-            + "The client converts it with the certificate's scoring config (Certificates page). "
-            + "status = pending_grading while Writing/Speaking waits for a mentor")
-    public ApiResponse<List<ProficiencyResponse>> getMyProficiency(@RequestParam(required = false) UUID certificateId) {
-        return ApiResponse.success("Lấy năng lực thành công", proficiencyService.getMyProficiency(certificateId));
     }
 
     @GetMapping("/me/exam-attempts/{attemptId}/result")

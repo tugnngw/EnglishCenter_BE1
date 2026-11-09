@@ -12,12 +12,13 @@
 --
 -- Tạo ra:
 --   3 chứng chỉ IELTS (4 phần), TOEIC (Listening / Reading), VSTEP (4 kỹ năng)
---   1 đề thi thử (trial) ĐÃ PUBLISH  : D3-IELTS-MINI-01   (3 section, 7 câu, đủ 5 loại câu hỏi)
---   1 khóa học mẫu + 1 đề của khóa học (course, cần enrollment) ĐÃ PUBLISH : D3-COURSE-QUIZ-01
+--   1 khóa học mẫu IELTS Foundation (cần enrollment) với 2 đề ĐÃ PUBLISH:
+--     D3-COURSE-QUIZ-01    (quiz, 2 câu)
+--     D3-IELTS-MIDTERM-01  (giữa kỳ, 3 section, 7 câu, đủ 5 loại câu hỏi - mở khi đạt Quiz)
 --
 -- ID cố định để dùng trong Postman:
---   exam trial  : d3000000-0000-4000-8000-000000000100
---   exam course : d3000000-0000-4000-8000-000000000200
+--   giữa kỳ : d3000000-0000-4000-8000-000000000100
+--   quiz    : d3000000-0000-4000-8000-000000000200
 -- =====================================================
 
 -- File lưu UTF-8; psql trên Windows mặc định WIN1252 nên phải khai báo để không lỗi tiếng Việt
@@ -53,18 +54,31 @@ INSERT INTO certificate_parts (part_id, certificate_id, part_name, part_descript
     ('d3000000-0000-4000-8000-000000000034', 'd3000000-0000-4000-8000-000000000003', 'Speaking',  'Nói, 0-10',       4, '{"minScore":0,"maxScore":10,"step":0.5,"scaleType":"AVERAGE","unit":"Điểm"}')
 ON CONFLICT (part_id) DO UPDATE SET properties = EXCLUDED.properties;
 
--- =====================================================
--- ĐỀ 1: THI THỬ (trial) - miễn phí, ai đăng nhập cũng làm được
--- =====================================================
-INSERT INTO exams (exam_id, exam_scope, created_by_user_id, certificate_id, exam_code, exam_type, exam_title,
-                   description, duration_minutes, passing_score, max_attempts, show_answers, show_score,
-                   is_free, price, difficulty_level, recommended_level, status, published_date)
-VALUES ('d3000000-0000-4000-8000-000000000100', 'trial',
+-- ---------- Khóa học mẫu (cần enrollment - Dev 4) ----------
+INSERT INTO courses (course_id, created_by_user_id, certificate_id, code, title, description, level, price, status)
+VALUES ('d3000000-0000-4000-8000-000000000020',
         (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
-        'd3000000-0000-4000-8000-000000000001', 'D3-IELTS-MINI-01', 'placement_test',
-        'IELTS Mini Placement Test', 'Đề kiểm tra đầu vào rút gọn: Listening, Reading, Writing',
+        'd3000000-0000-4000-8000-000000000001', 'D3-SAMPLE-COURSE', 'IELTS Foundation',
+        'Khóa học mẫu để thử đề thi course-scope', 'BEGINNER', 990000, 'active')
+ON CONFLICT (course_id) DO UPDATE SET title = EXCLUDED.title;
+
+-- =====================================================
+-- ĐỀ 1: GIỮA KỲ của khóa mẫu - mở khi học viên đã đạt hết Quiz của khóa (đề 2)
+-- (trước đây là đề kiểm tra đầu vào; phạm vi thi thử đã bỏ nên chuyển thành đề khóa học)
+-- =====================================================
+INSERT INTO exams (exam_id, exam_scope, created_by_user_id, certificate_id, course_id, exam_code, exam_type,
+                   exam_title, description, duration_minutes, passing_score, max_attempts, show_answers,
+                   show_score, is_free, price, difficulty_level, recommended_level, status, published_date)
+VALUES ('d3000000-0000-4000-8000-000000000100', 'course',
+        (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
+        'd3000000-0000-4000-8000-000000000001', 'd3000000-0000-4000-8000-000000000020',
+        'D3-IELTS-MIDTERM-01', 'midterm', 'IELTS Foundation Midterm',
+        'Đề giữa kỳ khóa IELTS Foundation: Listening, Reading, Writing; làm trong 45 phút',
         45, 50.00, 3, TRUE, TRUE, TRUE, 0, 'medium', 'B1', 'published', CURRENT_TIMESTAMP)
-ON CONFLICT (exam_id) DO NOTHING;
+-- Chạy lại trên DB cũ: chuyển đề kiểm tra đầu vào cũ thành đề giữa kỳ của khóa mẫu
+ON CONFLICT (exam_id) DO UPDATE SET exam_scope = EXCLUDED.exam_scope, course_id = EXCLUDED.course_id,
+    exam_code = EXCLUDED.exam_code, exam_type = EXCLUDED.exam_type, exam_title = EXCLUDED.exam_title,
+    description = EXCLUDED.description;
 
 INSERT INTO exam_sections (section_id, exam_id, certificate_part_id, section_type, title, instructions,
                            passage_text, audio_url, section_order, duration_minutes) VALUES
@@ -154,13 +168,6 @@ ON CONFLICT (id) DO NOTHING;
 -- =====================================================
 -- ĐỀ 2: ĐỀ CỦA KHÓA HỌC (course) - cần enrollment (Dev 4)
 -- =====================================================
-INSERT INTO courses (course_id, created_by_user_id, certificate_id, code, title, description, level, price, status)
-VALUES ('d3000000-0000-4000-8000-000000000020',
-        (SELECT user_id FROM users WHERE email = 'admin@gmail.com'),
-        'd3000000-0000-4000-8000-000000000001', 'D3-SAMPLE-COURSE', 'IELTS Foundation',
-        'Khóa học mẫu để thử đề thi course-scope', 'BEGINNER', 990000, 'active')
-ON CONFLICT (course_id) DO UPDATE SET title = EXCLUDED.title;
-
 INSERT INTO exams (exam_id, exam_scope, created_by_user_id, certificate_id, course_id, exam_code, exam_type,
                    exam_title, description, duration_minutes, passing_score, max_attempts, show_answers,
                    show_score, difficulty_level, recommended_level, status, published_date)
