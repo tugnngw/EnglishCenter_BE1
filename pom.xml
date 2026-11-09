@@ -115,14 +115,28 @@
 
         <!--
             Cloudinary (lưu trữ file bài tập).
-            CHỈ dùng cloudinary-core: artifact này KHÔNG kéo dependency nào
-            (không có httpclient4 như cloudinary-http44) nên không xung đột với
-            HTTP client của Spring Boot. Cần dùng API upload/destroy thì sau này
-            thêm cloudinary-http44 hoặc gọi REST API trực tiếp.
+            cloudinary-core: thư viện lõi (sinh URL, ký chữ ký upload).
+            cloudinary-http44: HTTP ADAPTER cho SDK Cloudinary.
+
+            Bắt buộc có cloudinary-http44: constructor `new Cloudinary(...)` gọi
+            `loadStrategies()` → dò các class `com.cloudinary.http44.UploaderStrategy`
+            trên classpath. Không có adapter → SDK ném
+            `java.lang.UnknownError: Can't find Cloudinary platform adapter [...]`.
+            Lỗi này là `Error` (không phải `Exception`) nên `catch (Exception)`
+            không bắt được → văng thẳng ra HTTP 500 khi dựng URL xem file bài nộp.
+
+            Về xung đột dependency: http44 kéo theo Apache HttpClient 4.4 (nhóm
+            `org.apache.http`), còn Spring Boot 4 dùng HttpClient 5 (nhóm
+            `org.apache.hc`) → hai namespace khác nhau, KHÔNG xung đột.
         -->
         <dependency>
             <groupId>com.cloudinary</groupId>
             <artifactId>cloudinary-core</artifactId>
+            <version>1.39.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.cloudinary</groupId>
+            <artifactId>cloudinary-http44</artifactId>
             <version>1.39.0</version>
         </dependency>
 

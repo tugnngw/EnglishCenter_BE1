@@ -18,14 +18,18 @@ import java.util.TreeMap;
 /**
  * Tích hợp Cloudinary cho bài tập (tài liệu đính kèm + bài nộp).
  * <p>
- * Chỉ dùng {@code cloudinary-core} (KHÔNG kéo dependency ngoài) nên không xung đột
- * với HTTP client của Spring Boot:
  * <ul>
  *     <li>{@link #signUploadParams} — sinh chữ ký SHA-1 để FE upload thẳng lên Cloudinary;</li>
  *     <li>{@link #buildAuthenticatedUrl} — dựng URL có thời hạn cho file {@code authenticated};</li>
  *     <li>{@link #buildPublicUrl} — dựng URL công khai cho tài liệu bài tập ({@code upload}).</li>
  * </ul>
  * API secret chỉ nằm ở BE (biến môi trường {@code CLOUDINARY_API_SECRET}).
+ * <p>
+ * <b>Instance {@link Cloudinary} được inject từ {@code CloudinaryConfig}</b> (bean
+ * Spring, tạo 1 lần duy nhất). KHÔNG gọi {@code new Cloudinary(...)} trong service:
+ * constructor của SDK dò HTTP adapter trên classpath và ném
+ * {@code UnknownError: Can't find Cloudinary platform adapter} nếu thiếu —
+ * lỗi này là {@link Error} nên {@code catch (Exception)} không bắt được.
  */
 @Service
 @Slf4j
@@ -62,12 +66,23 @@ public class CloudinaryService {
 
     private final boolean configured;
 
+    /**
+     * Instance Cloudinary dùng chung (bean Spring — xem {@code CloudinaryConfig}).
+     * <p>
+     * KHÔNG tạo {@code new Cloudinary(...)} bên trong method: constructor của SDK
+     * dò HTTP adapter trên classpath và ném {@code UnknownError} nếu không có.
+     * Bean được tạo 1 lần duy nhất, có fallback {@code load_strategies=false}.
+     */
+    private final Cloudinary cloudinary;
+
     public CloudinaryService(
+            Cloudinary cloudinary,
             @Value("${cloudinary.cloud-name:}") String cloudName,
             @Value("${cloudinary.api-key:}") String apiKey,
             @Value("${cloudinary.api-secret:}") String apiSecret,
             @Value("${cloudinary.auth-key:}") String authKey,
             @Value("${cloudinary.url-ttl-seconds:900}") int urlTtlSeconds) {
+        this.cloudinary = cloudinary;
         this.cloudName = cloudName == null ? "" : cloudName.trim();
         this.apiKey = apiKey == null ? "" : apiKey.trim();
         this.apiSecret = apiSecret == null ? "" : apiSecret.trim();
@@ -156,19 +171,13 @@ public class CloudinaryService {
         if (publicId == null || publicId.isBlank()) {
             return null;
         }
-        int ttl = expiresInSeconds == null || expiresInSeconds <= 0
-                ? urlTtlSeconds
-                : expiresInSeconds;
-        long expiration = (System.currentTimeMillis() / 1000L) + ttl;
 
         try {
-            Cloudinary cloudinary = new Cloudinary(configMap());
-            AuthToken token = new AuthToken(authKey).expiration(expiration);
             return cloudinary.url()
                     .resourceType(normalizeResourceType(resourceType))
                     .type(DELIVERY_AUTHENTICATED)
                     .publicId(publicId)
-                    .authToken(token)
+                    .signed(true)
                     .secure(true)
                     .generate();
         } catch (Exception ex) {
@@ -209,7 +218,6 @@ public class CloudinaryService {
             return false;
         }
         try {
-            Cloudinary cloudinary = new Cloudinary(configMap());
             cloudinary.uploader().destroy(publicId, destroyParams(resourceType, deliveryType));
             return true;
         } catch (Exception ex) {
@@ -221,15 +229,6 @@ public class CloudinaryService {
     /* =====================================================
      * Helpers
      * ===================================================== */
-
-    private Map<String, Object> configMap() {
-        Map<String, Object> config = new LinkedHashMap<>();
-        config.put("cloud_name", cloudName);
-        config.put("api_key", apiKey);
-        config.put("api_secret", apiSecret);
-        config.put("secure", true);
-        return config;
-    }
 
     private Map<String, Object> destroyParams(String resourceType, String deliveryType) {
         Map<String, Object> params = new LinkedHashMap<>();
