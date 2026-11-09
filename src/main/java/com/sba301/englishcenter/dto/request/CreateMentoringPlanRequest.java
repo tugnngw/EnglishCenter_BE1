@@ -1,5 +1,6 @@
 package com.sba301.englishcenter.dto.request;
 
+import com.sba301.englishcenter.validation.MeetingUrl;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
@@ -36,6 +37,7 @@ public class CreateMentoringPlanRequest {
     private String note;
 
     @Size(max = 500, message = "Link meeting không được vượt quá 500 ký tự")
+    @MeetingUrl
     private String meetingUrl;
 
     @NotEmpty(message = "Gói phải có ít nhất 1 buổi")

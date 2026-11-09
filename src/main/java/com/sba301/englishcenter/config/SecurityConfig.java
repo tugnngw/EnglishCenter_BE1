@@ -82,6 +82,9 @@ public class SecurityConfig {
                                 "/api/v1/auth/change-password",
                                 "/api/v1/account/**"
                         ).authenticated()
+                        // Dev 5: Mentor chỉ được XEM danh sách đề để chọn chặng EXAM / PRACTICE_EXAM khi tạo lộ trình
+                        // (khớp @PreAuthorize trên AdminExamController#getExams; phải đứng trước rule /api/v1/admin/**)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/exams").hasAnyRole("ADMIN", "MENTOR")
                         .requestMatchers("/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/v1/mentor/**").hasAnyRole("ADMIN", "MENTOR")
                         .requestMatchers("/api/v1/student/**").hasAnyRole("ADMIN", "STUDENT")

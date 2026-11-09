@@ -310,7 +310,22 @@ public class MentoringPlanServiceImpl implements MentoringPlanService {
         plan.setStatus(MentoringPlanStatus.cancelled);
         plan.setCancelReason(reason);
         planRepository.save(plan);
+        reopenConsultation(plan);
         log.info("Mentoring plan {} cancelled by {}: {}", plan.getPlanId(), cancelledBy, reason);
+    }
+
+    // Gói bị hủy / học viên từ chối -> lộ trình chưa chốt nữa: yêu cầu tư vấn "agreed" quay về "contacted"
+    // (mentor vẫn phụ trách, có thể tư vấn lại rồi tạo gói mới hoặc đóng yêu cầu)
+    private void reopenConsultation(MentoringPlan plan) {
+        if (plan.getConsultationId() == null) {
+            return;
+        }
+        consultationRepository.findWithLockByRequestId(plan.getConsultationId())
+                .filter(c -> c.getStatus() == ConsultationStatus.agreed)
+                .ifPresent(c -> {
+                    c.setStatus(ConsultationStatus.contacted);
+                    consultationRepository.save(c);
+                });
     }
 
     private LocalDateTime[] toUtcRange(PlanSessionRequest session) {
