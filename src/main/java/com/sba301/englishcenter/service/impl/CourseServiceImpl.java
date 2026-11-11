@@ -39,7 +39,7 @@ import com.sba301.englishcenter.repository.VocabularySetRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.service.CourseService;
 import com.sba301.englishcenter.service.CourseExamContentService;
-import com.sba301.englishcenter.service.HomeworkContentData;
+import com.sba301.englishcenter.util.HomeworkContentData;
 import com.sba301.englishcenter.service.HomeworkGraderAssignmentService;
 import com.sba301.englishcenter.service.LessonProgressService;
 import com.sba301.englishcenter.service.NotificationService;

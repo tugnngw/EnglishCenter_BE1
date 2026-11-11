@@ -131,14 +131,20 @@ public class UserServiceImpl implements UserService {
     }
 
     private UserResponse toUserResponse(User user) {
-        return UserResponse.builder()
+        UserResponse.UserResponseBuilder builder = UserResponse.builder()
                 .userId(user.getUserId())
                 .email(user.getEmail())
                 .fullName(user.getFullName())
                 .phone(user.getPhone())
                 .role(user.getRole().getRoleName())
                 .isActive(user.getIsActive())
-                .createdAt(user.getCreatedAt())
-                .build();
+                .createdAt(user.getCreatedAt());
+        // Nguyện vọng + trình độ hiện tại (chỉ có ở USER / STUDENT)
+        studentProfileRepository.findById(user.getUserId()).ifPresent(p -> builder
+                .targetCertificateId(p.getTargetCertificateId())
+                .targetScore(p.getTargetScore())
+                .currentLevel(p.getCurrentLevel())
+                .currentScore(p.getCurrentScore()));
+        return builder.build();
     }
 }

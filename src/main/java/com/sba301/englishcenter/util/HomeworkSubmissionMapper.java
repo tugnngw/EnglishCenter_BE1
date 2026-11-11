@@ -1,4 +1,4 @@
-package com.sba301.englishcenter.service;
+package com.sba301.englishcenter.util;
 
 import com.sba301.englishcenter.dto.response.HomeworkGradeHistoryResponse;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;

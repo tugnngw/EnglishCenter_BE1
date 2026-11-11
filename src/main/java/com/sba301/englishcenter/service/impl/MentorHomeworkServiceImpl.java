@@ -20,7 +20,7 @@ import com.sba301.englishcenter.integration.ai.ClaudeClient;
 import com.sba301.englishcenter.repository.CourseContentRepository;
 import com.sba301.englishcenter.repository.HomeworkSubmissionRepository;
 import com.sba301.englishcenter.repository.LearningPathRepository;
-import com.sba301.englishcenter.service.HomeworkContentData;
+import com.sba301.englishcenter.util.HomeworkContentData;
 import com.sba301.englishcenter.service.HomeworkGraderAssignmentService;
 import com.sba301.englishcenter.service.MentorHomeworkService;
 import com.sba301.englishcenter.util.JsonUtil;

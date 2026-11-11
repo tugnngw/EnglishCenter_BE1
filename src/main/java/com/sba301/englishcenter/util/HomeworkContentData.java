@@ -1,4 +1,4 @@
-package com.sba301.englishcenter.service;
+package com.sba301.englishcenter.util;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.sba301.englishcenter.dto.response.HomeworkRubricCriterion;

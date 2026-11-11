@@ -17,7 +17,7 @@ import com.sba301.englishcenter.repository.HomeworkSubmissionRepository;
 import com.sba301.englishcenter.repository.MentoringPlanRepository;
 import com.sba301.englishcenter.service.ConsultationService;
 import com.sba301.englishcenter.service.CourseExamContentService;
-import com.sba301.englishcenter.service.HomeworkContentData;
+import com.sba301.englishcenter.util.HomeworkContentData;
 import com.sba301.englishcenter.service.LearningPathService;
 import com.sba301.englishcenter.service.LessonProgressService;
 import com.sba301.englishcenter.service.StudentProgressService;

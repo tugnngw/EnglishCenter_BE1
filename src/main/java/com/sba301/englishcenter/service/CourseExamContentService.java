@@ -1,14 +1,6 @@
 package com.sba301.englishcenter.service;
 
-import com.sba301.englishcenter.common.enums.ContentType;
-import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.entity.Exam;
-import com.sba301.englishcenter.entity.ExamQuestion;
-import com.sba301.englishcenter.repository.CourseContentRepository;
-import com.sba301.englishcenter.repository.ExamQuestionRepository;
-import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -25,14 +17,7 @@ import java.util.UUID;
  *       <b>mở khoá mentor</b> (đã mua gói kèm 1-1) để mentor chấm tay.</li>
  * </ol>
  */
-@Service
-@RequiredArgsConstructor
-public class CourseExamContentService {
-
-    private final CourseContentRepository courseContentRepository;
-    private final ExamQuestionRepository examQuestionRepository;
-    private final LessonProgressService lessonProgressService;
-    private final HomeworkGraderAssignmentService graderAssignmentService;
+public interface CourseExamContentService {
 
     /**
      * Số bài học (video) của khóa học — dùng làm mẫu số của điều kiện "đã học hết".
@@ -41,63 +26,24 @@ public class CourseExamContentService {
      * không có video thì học viên không thể xem → không thể hoàn thành → nếu tính vào
      * mẫu số thì bài thi cuối kỳ bị khoá vĩnh viễn.
      */
-    @Transactional(readOnly = true)
-    public long countLessons(UUID courseId) {
-        if (courseId == null) {
-            return 0;
-        }
-        return lessonIdsWithVideo(courseId).size();
-    }
+    long countLessons(UUID courseId);
 
     /** Id các bài học có video của khóa học. */
-    @Transactional(readOnly = true)
-    public List<UUID> lessonIdsWithVideo(UUID courseId) {
-        List<UUID> ids = new java.util.ArrayList<>();
-        for (com.sba301.englishcenter.entity.CourseContent content
-                : courseContentRepository
-                .findByCourse_CourseIdAndContentTypeOrderByContentOrderAsc(courseId, ContentType.LESSON)) {
-            String videoUrl = com.sba301.englishcenter.util.JsonUtil
-                    .readString(content.getContentData(), "videoUrl");
-            if (videoUrl != null && !videoUrl.isBlank()) {
-                ids.add(content.getContentId());
-            }
-        }
-        return ids;
-    }
+    List<UUID> lessonIdsWithVideo(UUID courseId);
 
     /**
      * Học viên đã xem xong TẤT CẢ video của khóa chưa?
      * <p>
      * Khóa chưa có bài học video nào → coi như đã xong (không chặn vô ích).
      */
-    @Transactional(readOnly = true)
-    public boolean allLessonsCompleted(UUID studentId, UUID courseId) {
-        List<UUID> lessonIds = lessonIdsWithVideo(courseId);
-        if (lessonIds.isEmpty()) {
-            return true;
-        }
-        if (studentId == null) {
-            return false;
-        }
-        long completed = lessonProgressService.countCompletedLessons(studentId, courseId, lessonIds);
-        return completed >= lessonIds.size();
-    }
+    boolean allLessonsCompleted(UUID studentId, UUID courseId);
 
     /**
      * Đề thi này có câu tự luận (cần mentor chấm tay) hay không?
      * <p>
      * V30: dùng để gợi ý "nâng cấp gói mentor" cho học viên — KHÔNG dùng để khoá đề.
      */
-    @Transactional(readOnly = true)
-    public boolean requiresMentorGrading(UUID examId) {
-        if (examId == null) {
-            return false;
-        }
-        List<ExamQuestion> questions = examQuestionRepository.findDetailedByExamId(examId);
-        return questions.stream()
-                .anyMatch(eq -> eq.getQuestion() != null
-                        && eq.getQuestion().getQuestionType() == QuestionType.ESSAY);
-    }
+    boolean requiresMentorGrading(UUID examId);
 
     /**
      * Học viên đã mua gói kèm 1-1 (có mentor chấm tay) hay chưa.
@@ -105,10 +51,7 @@ public class CourseExamContentService {
      * V30: chỉ dùng để QUYẾT ĐỊNH ai chấm phần tự luận sau khi nộp — KHÔNG dùng để
      * khoá đề thi nữa (học viên chưa mua gói vẫn làm + nộp được toàn bộ đề).
      */
-    @Transactional(readOnly = true)
-    public boolean hasMentorPlan(UUID studentId) {
-        return studentId != null && graderAssignmentService.hasMentor(studentId);
-    }
+    boolean hasMentorPlan(UUID studentId);
 
     /**
      * Đề thi có được gắn vào khóa học (dưới dạng nội dung 'exam') không?
@@ -116,26 +59,10 @@ public class CourseExamContentService {
      * Nếu có → luật mở khoá của nội dung 'exam' áp dụng cho đề đó, kể cả khi học viên
      * mở đề từ Ngân hàng đề (để không lách luật).
      */
-    @Transactional(readOnly = true)
-    public UUID findCourseIdOfExamContent(UUID examId) {
-        if (examId == null) {
-            return null;
-        }
-        List<com.sba301.englishcenter.entity.CourseContent> contents =
-                courseContentRepository.findByContentTypeAndExam_ExamId(ContentType.EXAM, examId);
-        for (com.sba301.englishcenter.entity.CourseContent content : contents) {
-            if (content.getCourse() != null) {
-                return content.getCourse().getCourseId();
-            }
-        }
-        return null;
-    }
+    UUID findCourseIdOfExamContent(UUID examId);
 
     /** Đề có gắn vào nội dung 'exam' của khóa nào không. */
-    @Transactional(readOnly = true)
-    public boolean isExamContent(Exam exam) {
-        return exam != null && findCourseIdOfExamContent(exam.getExamId()) != null;
-    }
+    boolean isExamContent(Exam exam);
 
     /**
      * Lý do học viên CHƯA được làm đề cuối kỳ (null = được phép).
@@ -150,15 +77,5 @@ public class CourseExamContentService {
      * vẫn làm và nộp được TOÀN BỘ đề cuối kỳ; phần tự luận được lưu nháp ở trạng
      * thái {@code awaiting_mentor} cho tới khi học viên nâng cấp gói.
      */
-    @Transactional(readOnly = true)
-    public String findLockReason(UUID examId, UUID studentId) {
-        UUID courseId = findCourseIdOfExamContent(examId);
-        if (courseId == null) {
-            return null; // đề không gắn vào nội dung 'exam' → áp luật thi nối tiếp cũ
-        }
-        if (!allLessonsCompleted(studentId, courseId)) {
-            return "lessons";
-        }
-        return null;
-    }
+    String findLockReason(UUID examId, UUID studentId);
 }
