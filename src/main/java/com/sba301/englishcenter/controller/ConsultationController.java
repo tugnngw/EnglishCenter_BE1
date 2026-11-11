@@ -8,11 +8,13 @@ import com.sba301.englishcenter.dto.response.AttemptResultResponse;
 import com.sba301.englishcenter.dto.response.AttemptSummaryResponse;
 import com.sba301.englishcenter.dto.response.ConsultationResponse;
 import com.sba301.englishcenter.dto.response.StudentOverviewResponse;
+import com.sba301.englishcenter.dto.response.StudentProgressResponse;
 import com.sba301.englishcenter.exception.AppException;
 import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.service.ConsultationService;
 import com.sba301.englishcenter.service.ExamAttemptService;
+import com.sba301.englishcenter.service.StudentProgressService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -39,6 +41,7 @@ public class ConsultationController {
 
     private final ConsultationService consultationService;
     private final ExamAttemptService examAttemptService;
+    private final StudentProgressService studentProgressService;
 
     // ===================== HỌC VIÊN =====================
 
@@ -110,6 +113,15 @@ public class ConsultationController {
     @Operation(summary = "Kết quả chi tiết 1 lượt test level", description = "Điểm từng kỹ năng, tóm tắt, nhận xét AI")
     public ApiResponse<AttemptResultResponse> getLevelTestResult(@PathVariable UUID studentId, @PathVariable UUID attemptId) {
         return ApiResponse.success(examAttemptService.getStudentLevelTestResult(studentId, attemptId));
+    }
+
+    @GetMapping("/mentor/students/{studentId}/progress")
+    @PreAuthorize("hasRole('MENTOR')")
+    @Operation(summary = "Tiến độ học tập của học viên mình phụ trách",
+            description = "% khóa học, điểm bài tập, tiến độ lộ trình, số buổi kèm 1-1. "
+                    + "Chỉ mentor đã nhận tư vấn / tạo gói cho học viên (khác -> 403)")
+    public ApiResponse<StudentProgressResponse> getStudentProgress(@PathVariable UUID studentId) {
+        return ApiResponse.success(studentProgressService.getProgress(currentUserId(), studentId));
     }
 
     private UUID currentUserId() {

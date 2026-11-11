@@ -27,6 +27,9 @@ public interface MentoringPlanRepository extends JpaRepository<MentoringPlan, UU
     boolean existsByMentorIdAndStudentIdAndStatusIn(UUID mentorId, UUID studentId,
                                                     Collection<MentoringPlanStatus> statuses);
 
+    // Mentor đã tạo gói kèm 1-1 nào cho học viên này chưa (mọi trạng thái)
+    boolean existsByMentorIdAndStudentId(UUID mentorId, UUID studentId);
+
     // Khóa dòng khi thanh toán / hủy gói, tránh webhook và thao tác hủy chạy cùng lúc
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<MentoringPlan> findWithLockByPlanId(UUID planId);

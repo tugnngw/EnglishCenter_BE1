@@ -27,6 +27,9 @@ public interface ConsultationRequestRepository extends JpaRepository<Consultatio
     // Yêu cầu mentor này đang phụ trách
     Page<ConsultationRequest> findByMentorIdOrderByLastUpdatedDesc(UUID mentorId, Pageable pageable);
 
+    // Mentor đã nhận yêu cầu tư vấn của học viên này chưa (= đang phụ trách)
+    boolean existsByMentorIdAndStudentId(UUID mentorId, UUID studentId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<ConsultationRequest> findWithLockByRequestId(UUID requestId);
 }
