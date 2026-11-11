@@ -52,6 +52,9 @@ public class BookingServiceImpl implements BookingService {
     // Booking còn hiệu lực: được hủy, chưa có kết quả
     private static final List<BookingStatus> ACTIVE_STATUSES = List.of(BookingStatus.pending, BookingStatus.confirmed);
     private static final String SORT_FIELD = "schedule.startTime";
+    // Study Schedule: chỉ hiện buổi đã thanh toán (bỏ pending = chờ thanh toán gói)
+    private static final List<BookingStatus> STUDY_SCHEDULE_STATUSES = List.of(
+            BookingStatus.confirmed, BookingStatus.completed, BookingStatus.cancelled, BookingStatus.no_show);
     private static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final DateTimeFormatter VN_FORMAT = DateTimeFormatter.ofPattern("HH:mm dd/MM/yyyy");
 
@@ -280,6 +283,14 @@ public class BookingServiceImpl implements BookingService {
     @Transactional(readOnly = true)
     public PageResponse<BookingResponse> getStudentSchedule(UUID studentId, boolean past, Pageable pageable) {
         return findPage(BookingSpecification.forStudent(studentId, past, UtcTimeUtil.nowUtc()), pageable, past);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageResponse<BookingResponse> getStudentSessions(UUID studentId, LocalDateTime from, LocalDateTime to,
+                                                            BookingStatus status, Pageable pageable) {
+        List<BookingStatus> statuses = status != null ? List.of(status) : STUDY_SCHEDULE_STATUSES;
+        return findPage(BookingSpecification.forStudentInRange(studentId, statuses, from, to), pageable, false);
     }
 
     @Override

@@ -9,6 +9,7 @@ import com.sba301.englishcenter.dto.request.UpdateBookingStatusRequest;
 import com.sba301.englishcenter.dto.response.BookingResponse;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
@@ -51,6 +52,13 @@ public interface BookingService {
      * Lịch của học viên: sắp tới (past = false) hoặc đã qua (past = true) (TASK D5-12).
      */
     PageResponse<BookingResponse> getStudentSchedule(UUID studentId, boolean past, Pageable pageable);
+
+    /**
+     * Lịch học (Study Schedule) của học viên: các buổi kèm 1-1 bắt đầu trong [from, to), sắp theo giờ học tăng dần.
+     * status = null -> mọi buổi đã thanh toán (confirmed / completed / cancelled / no_show), bỏ buổi chờ thanh toán.
+     */
+    PageResponse<BookingResponse> getStudentSessions(UUID studentId, LocalDateTime from, LocalDateTime to,
+                                                     BookingStatus status, Pageable pageable);
 
     /**
      * Lịch dạy của mentor: sắp tới (past = false) hoặc đã qua (past = true) (TASK D5-13).

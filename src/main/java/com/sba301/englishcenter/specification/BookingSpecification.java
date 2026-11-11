@@ -11,6 +11,7 @@ import org.springframework.data.jpa.domain.Specification;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -40,6 +41,21 @@ public class BookingSpecification {
         return (root, query, criteriaBuilder) -> criteriaBuilder.and(
                 criteriaBuilder.equal(root.get("mentorId"), mentorId),
                 timePredicate(root, criteriaBuilder, past, now));
+    }
+
+    /**
+     * Lịch học (Study Schedule) của học viên: các buổi kèm 1-1 có giờ bắt đầu trong [from, to), theo các trạng thái truyền vào.
+     */
+    public static Specification<Booking> forStudentInRange(UUID studentId, Collection<BookingStatus> statuses,
+                                                           LocalDateTime from, LocalDateTime to) {
+        return (root, query, criteriaBuilder) -> {
+            Path<LocalDateTime> startTime = root.<MentorSchedule>get("schedule").get("startTime");
+            return criteriaBuilder.and(
+                    criteriaBuilder.equal(root.get("studentId"), studentId),
+                    root.get("status").in(statuses),
+                    criteriaBuilder.greaterThanOrEqualTo(startTime, from),
+                    criteriaBuilder.lessThan(startTime, to));
+        };
     }
 
     /**
