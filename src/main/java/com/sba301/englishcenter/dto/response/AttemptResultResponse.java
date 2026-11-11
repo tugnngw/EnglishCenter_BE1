@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -39,4 +40,14 @@ public class AttemptResultResponse {
     List<AnswerResultResponse> answers;
     /** Đề luyện tập đã chấm xong: band / CEFR theo chứng chỉ mục tiêu của học viên */
     PracticeLevelResponse practiceLevel;
+
+    /**
+     * V30: điểm phần TRẮC NGHIỆM (chấm tự động) và tổng điểm trắc nghiệm của đề.
+     * <p>
+     * Khi phần tự luận còn đang lưu nháp (chờ nâng cấp gói mentor), {@code score} /
+     * {@code maxScore} phản ánh cả điểm của các câu tự luận CHƯA được chấm — nên FE
+     * hiển thị riêng điểm trắc nghiệm để không gây hiểu nhầm.
+     */
+    BigDecimal objectiveScore;
+    BigDecimal objectiveMaxScore;
 }

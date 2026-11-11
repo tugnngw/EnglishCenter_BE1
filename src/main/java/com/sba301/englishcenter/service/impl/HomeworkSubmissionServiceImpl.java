@@ -569,6 +569,7 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
             fileUrl = cloudinary.buildAuthenticatedUrl(
                     submission.getFilePublicId(),
                     submission.getFileResourceType(),
+                    submission.getFileFormat(),
                     null);
         }
         return HomeworkSubmissionMapper.toResponse(submission, fileUrl, null);

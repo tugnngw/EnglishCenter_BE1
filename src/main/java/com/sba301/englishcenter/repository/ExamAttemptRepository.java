@@ -80,7 +80,22 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, UUID> 
     BigDecimal averageScoreByExamId(@Param("examId") UUID examId,
                                     @Param("statuses") Collection<AttemptStatus> statuses);
 
-    /** Id các lượt thi đang làm nhưng đã quá hạn (kể cả thời gian ân hạn) - dùng cho job tự nộp bài. */
+    /**
+     * Các lượt thi đang lưu NHÁP chờ nâng cấp gói mentor (V30).
+     * <p>
+     * Học viên nộp đề cuối kỳ khi CHƯA mua gói mentor → phần tự luận lưu nháp ở trạng
+     * thái {@code awaiting_mentor}. Khi học viên mua gói mentor SAU đó, các lượt này
+     * được chuyển sang {@code submitted} để mentor thấy và chấm tay — học viên KHÔNG
+     * phải làm lại bài.
+     */
+    @EntityGraph(attributePaths = {"exam", "student"})
+    @Query("select a from ExamAttempt a where a.student.userId = :studentId and a.status = :status "
+            + "order by a.endTime asc")
+    List<ExamAttempt> findByStudentAndStatus(@Param("studentId") UUID studentId,
+                                             @Param("status") AttemptStatus status);
+
+    /**
+     * Id các lượt thi đang làm nhưng đã quá hạn (kể cả thời gian ân hạn) - dùng cho job tự nộp bài. */
     @Query("select a.attemptId from ExamAttempt a where a.status = :status and a.expiresAt < :cutoff "
             + "order by a.expiresAt asc")
     List<UUID> findOverdueAttemptIds(@Param("status") AttemptStatus status,

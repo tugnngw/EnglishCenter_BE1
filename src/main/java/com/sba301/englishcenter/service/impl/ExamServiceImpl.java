@@ -36,6 +36,7 @@ import com.sba301.englishcenter.repository.QuestionRepository;
 import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.security.UserPrincipal;
+import com.sba301.englishcenter.service.CourseExamContentService;
 import com.sba301.englishcenter.service.ExamAccessPolicy;
 import com.sba301.englishcenter.service.ExamService;
 import com.sba301.englishcenter.specification.ExamSpecification;
@@ -73,6 +74,8 @@ public class ExamServiceImpl implements ExamService {
     private final UserRepository userRepository;
     private final QuestionRepository questionRepository;
     private final ExamAccessPolicy accessPolicy;
+    /** V30: biết đề có câu tự luận và học viên đã mua gói mentor hay chưa. */
+    private final CourseExamContentService courseExamContentService;
     private final ExamMapper examMapper;
 
     // ============================================
@@ -148,6 +151,12 @@ public class ExamServiceImpl implements ExamService {
         // Nội dung câu hỏi chỉ được giao trong lượt thi (có đồng hồ) - xem POST /exams/{id}/attempts
         ExamDetailResponse detail = buildDetail(exam, ExamMapper.View.OUTLINE, accessible, message);
         denied.ifPresent(d -> detail.setAccessCode(d.code().getCode()));
+        // V30: đề có phần tự luận + học viên chưa mua gói mentor → vẫn làm được,
+        // nhưng phần tự luận sẽ lưu nháp chờ nâng cấp gói. FE dùng để gợi ý trước.
+        detail.setRequiresMentorGrading(courseExamContentService.requiresMentorGrading(exam.getExamId()));
+        if (userId != null) {
+            detail.setHasMentorPlan(courseExamContentService.hasMentorPlan(userId));
+        }
         return detail;
     }
 

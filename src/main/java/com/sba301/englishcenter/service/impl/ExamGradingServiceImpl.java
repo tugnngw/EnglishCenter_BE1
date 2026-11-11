@@ -103,6 +103,11 @@ public class ExamGradingServiceImpl implements ExamGradingService {
         if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) {
             throw new AppException(ErrorCode.ATTEMPT_NOT_SUBMITTED);
         }
+        // V30: bài tự luận còn lưu nháp (học viên chưa mua gói mentor) → chưa được chấm.
+        // Khi học viên nâng cấp gói, bài chuyển sang 'submitted' và mở cho mentor chấm.
+        if (attempt.getStatus() == AttemptStatus.AWAITING_MENTOR) {
+            throw new AppException(ErrorCode.ATTEMPT_AWAITING_MENTOR_UPGRADE);
+        }
         return examMapper.toResult(attempt,
                 examQuestionRepository.findDetailedByExamId(attempt.getExam().getExamId()),
                 answersByQuestion(attemptId), true);
@@ -118,6 +123,10 @@ public class ExamGradingServiceImpl implements ExamGradingService {
         assertCanGrade(exam, attempt);
         if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) {
             throw new AppException(ErrorCode.ATTEMPT_NOT_SUBMITTED);
+        }
+        // V30: bài tự luận còn lưu nháp (học viên chưa mua gói mentor) → chưa được chấm.
+        if (attempt.getStatus() == AttemptStatus.AWAITING_MENTOR) {
+            throw new AppException(ErrorCode.ATTEMPT_AWAITING_MENTOR_UPGRADE);
         }
 
         claimForGrading(attempt, principal);

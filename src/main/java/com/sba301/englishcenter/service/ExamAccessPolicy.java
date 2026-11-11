@@ -112,13 +112,12 @@ public class ExamAccessPolicy {
                     return Optional.of(Denial.of(ErrorCode.EXAM_ENROLLMENT_REQUIRED));
                 }
                 // V29: đề được gắn vào nội dung 'exam' của khóa → áp luật mở khoá
-                // (xem xong hết video + mua gói kèm 1-1 nếu có phần tự luận).
+                // (xem xong hết video).
+                // V30: KHÔNG khoá vì thiếu gói mentor — học viên chưa mua gói vẫn làm
+                // + nộp được toàn bộ đề; phần tự luận lưu nháp chờ nâng cấp gói.
                 String lockReason = courseExamContentService.findLockReason(exam.getExamId(), userId);
                 if ("lessons".equals(lockReason)) {
                     return Optional.of(Denial.of(ErrorCode.EXAM_CONTENT_LOCKED));
-                }
-                if ("mentor".equals(lockReason)) {
-                    return Optional.of(Denial.of(ErrorCode.EXAM_CONTENT_MENTOR_REQUIRED));
                 }
                 // V29: đề được gắn vào nội dung 'exam' của khóa → luật mở khoá của
                 // nội dung này (xem xong hết video + mở khoá mentor 1-1) là luật
@@ -222,7 +221,8 @@ public class ExamAccessPolicy {
                                 + "COUNT(*) FILTER (WHERE NOT EXISTS (SELECT 1 FROM exam_attempts a "
                                 + "  WHERE a.exam_id = e.exam_id AND a.student_id = :studentId AND a.passed = TRUE) "
                                 + "  AND EXISTS (SELECT 1 FROM exam_attempts a WHERE a.exam_id = e.exam_id "
-                                + "  AND a.student_id = :studentId AND CAST(a.status AS text) = 'submitted')) "
+                                + "  AND a.student_id = :studentId "
+                                + "  AND CAST(a.status AS text) IN ('submitted', 'awaiting_mentor'))) "
                                 + "FROM exams e WHERE e.course_id = :courseId "
                                 + "AND CAST(e.exam_type AS text) = :examType AND CAST(e.status AS text) = 'published'")
                 .setParameter("courseId", courseId)

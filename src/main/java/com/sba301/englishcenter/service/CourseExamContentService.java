@@ -85,6 +85,8 @@ public class CourseExamContentService {
 
     /**
      * Đề thi này có câu tự luận (cần mentor chấm tay) hay không?
+     * <p>
+     * V30: dùng để gợi ý "nâng cấp gói mentor" cho học viên — KHÔNG dùng để khoá đề.
      */
     @Transactional(readOnly = true)
     public boolean requiresMentorGrading(UUID examId) {
@@ -97,7 +99,12 @@ public class CourseExamContentService {
                         && eq.getQuestion().getQuestionType() == QuestionType.ESSAY);
     }
 
-    /** Học viên đã mua gói kèm 1-1 (có mentor chấm tay) hay chưa. */
+    /**
+     * Học viên đã mua gói kèm 1-1 (có mentor chấm tay) hay chưa.
+     * <p>
+     * V30: chỉ dùng để QUYẾT ĐỊNH ai chấm phần tự luận sau khi nộp — KHÔNG dùng để
+     * khoá đề thi nữa (học viên chưa mua gói vẫn làm + nộp được toàn bộ đề).
+     */
     @Transactional(readOnly = true)
     public boolean hasMentorPlan(UUID studentId) {
         return studentId != null && graderAssignmentService.hasMentor(studentId);
@@ -137,8 +144,11 @@ public class CourseExamContentService {
      * Kết quả:
      * <ul>
      *   <li>{@code "lessons"} — chưa xem xong TẤT CẢ video của khóa;</li>
-     *   <li>{@code "mentor"} — đề có phần tự luận nhưng học viên chưa mua gói kèm 1-1.</li>
      * </ul>
+     * <p>
+     * <b>V30:</b> KHÔNG còn lý do {@code "mentor"}. Học viên chưa mua gói mentor 1-1
+     * vẫn làm và nộp được TOÀN BỘ đề cuối kỳ; phần tự luận được lưu nháp ở trạng
+     * thái {@code awaiting_mentor} cho tới khi học viên nâng cấp gói.
      */
     @Transactional(readOnly = true)
     public String findLockReason(UUID examId, UUID studentId) {
@@ -148,9 +158,6 @@ public class CourseExamContentService {
         }
         if (!allLessonsCompleted(studentId, courseId)) {
             return "lessons";
-        }
-        if (requiresMentorGrading(examId) && !hasMentorPlan(studentId)) {
-            return "mentor";
         }
         return null;
     }

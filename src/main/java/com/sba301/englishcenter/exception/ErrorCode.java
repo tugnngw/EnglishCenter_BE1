@@ -136,6 +136,12 @@ public enum ErrorCode {
             HttpStatus.FORBIDDEN),
     EXAM_DURATION_OUT_OF_RANGE(5034, "Thời lượng không hợp với loại đề", HttpStatus.BAD_REQUEST),
     EXAM_DURATION_TOO_SHORT(5035, "Thời lượng đề quá ngắn so với nội dung đề", HttpStatus.BAD_REQUEST),
+    /**
+     * V30: bài tự luận đang LƯU NHÁP vì học viên chưa mua gói mentor 1-1.
+     * Chưa thể chấm cho tới khi học viên nâng cấp gói (lúc đó bài tự chuyển sang hàng đợi chấm).
+     */
+    ATTEMPT_AWAITING_MENTOR_UPGRADE(5036, "Bài tự luận đang chờ học viên nâng cấp gói mentor 1-1 để được chấm",
+            HttpStatus.CONFLICT),
     // === Dev 2.5 - Bài tập: nộp bài, chấm điểm, lưu trữ file ===
     HOMEWORK_SUBMISSION_TYPE_MISMATCH(3020,
             "Hình thức nộp không khớp với bài tập",

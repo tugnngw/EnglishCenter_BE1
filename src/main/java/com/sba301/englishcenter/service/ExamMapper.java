@@ -279,6 +279,7 @@ public class ExamMapper {
                 .percentage(showScore ? ExamGrader.percentage(attempt.getScore(), attempt.getMaxScore()) : null)
                 .passed(showScore && !pending ? attempt.getPassed() : null)
                 .pendingManualGrading(finished ? pending : null)
+                .mentorUpgradeRequired(finished ? attempt.getStatus() == AttemptStatus.AWAITING_MENTOR : null)
                 .autoSubmitted(attempt.getAutoSubmitted());
         if (includeStudent && attempt.getStudent() != null) {
             User student = attempt.getStudent();
@@ -308,6 +309,10 @@ public class ExamMapper {
         boolean pendingAny = false;
         List<AnswerResultResponse> answerResults = new ArrayList<>();
         Map<UUID, SectionAccumulator> sectionScores = new LinkedHashMap<>();
+        // Điểm phần trắc nghiệm (chấm tự động) — tách riêng để học viên thấy đúng điểm
+        // khi phần tự luận còn đang chờ mentor chấm.
+        BigDecimal objectiveScore = BigDecimal.ZERO;
+        BigDecimal objectiveMaxScore = BigDecimal.ZERO;
 
         for (int i = 0; i < ordered.size(); i++) {
             ExamQuestion eq = ordered.get(i);
@@ -319,6 +324,10 @@ public class ExamMapper {
             pendingAny |= pending;
             BigDecimal earned = answer != null ? answer.getEarnedScore() : BigDecimal.ZERO;
             boolean correct = objective && answer != null && Boolean.TRUE.equals(answer.getIsCorrect());
+            if (objective) {
+                objectiveMaxScore = objectiveMaxScore.add(ExamGrader.points(q));
+                objectiveScore = objectiveScore.add(earned);
+            }
 
             AnswerResultResponse.AnswerResultResponseBuilder builder = AnswerResultResponse.builder()
                     .questionId(q.getQuestionId())
@@ -375,6 +384,8 @@ public class ExamMapper {
                 .answersVisible(answersVisible)
                 .sectionScores(sections)
                 .answers(answerResults)
+                .objectiveScore(scoreVisible ? objectiveScore : null)
+                .objectiveMaxScore(scoreVisible ? objectiveMaxScore : null)
                 .build();
     }
 

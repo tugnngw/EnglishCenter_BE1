@@ -38,6 +38,21 @@ public class ExamDetailResponse {
     /** Mã lỗi khi accessible = false (VD 5033 đang chờ chấm). */
     Integer accessCode;
 
+    /**
+     * V30: đề này có câu tự luận (Writing / Speaking) cần mentor chấm tay không.
+     * <p>
+     * Học viên CHƯA mua gói kèm 1-1 vẫn làm + nộp được toàn bộ đề; phần tự luận được
+     * lưu nháp ở trạng thái {@code awaiting_mentor} cho tới khi nâng cấp gói.
+     */
+    Boolean requiresMentorGrading;
+
+    /**
+     * V30: học viên (người đang xem) đã mua gói kèm 1-1 hay chưa.
+     * <p>
+     * Chỉ có giá trị khi học viên đã đăng nhập.
+     */
+    Boolean hasMentorPlan;
+
     /** Chỉ admin: bộ đề của khóa chưa đủ nên luật thi nối tiếp bị bỏ qua. */
     List<String> warnings;
 

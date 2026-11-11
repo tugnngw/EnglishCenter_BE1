@@ -98,6 +98,15 @@ public class CourseContentResponse {
     Boolean requiresMentor;
 
     /**
+     * V30: học viên (người đang xem) đã mua gói kèm 1-1 hay chưa.
+     * <p>
+     * Chỉ có giá trị khi {@code contentType = 'exam'}. V30: học viên CHƯA mua gói vẫn
+     * làm + nộp được toàn bộ đề; phần tự luận được lưu nháp ở trạng thái
+     * {@code awaiting_mentor} cho tới khi nâng cấp gói.
+     */
+    Boolean hasMentorPlan;
+
+    /**
      * Lý do bài thi cuối kỳ bị khoá (null = đã mở).
      * <p>
      * Giá trị: {@code "lessons"} = chưa xem xong hết video của khóa;

@@ -51,6 +51,15 @@ public class CloudinaryService {
     /** Delivery type của tài liệu đính kèm của bài tập: {@code upload} (public). */
     public static final String DELIVERY_UPLOAD = "upload";
 
+    /**
+     * Định dạng đầu ra ép cho file ghi âm (resource_type = video).
+     * <p>
+     * Cloudinary lưu audio dưới dạng video → trả {@code Content-Type} là
+     * {@code video/webm} → thẻ {@code <audio>} không phát được.
+     * Ép {@code .mp3} để nhận {@code audio/mpeg}.
+     */
+    public static final String AUDIO_OUTPUT_FORMAT = "mp3";
+
     /** Thời hạn URL xem file bài nộp (giây). */
     private static final int DEFAULT_URL_TTL_SECONDS = 900;
 
@@ -167,19 +176,49 @@ public class CloudinaryService {
      * @param expiresInSeconds  số giây URL còn hiệu lực (mặc định 15 phút)
      */
     public String buildAuthenticatedUrl(String publicId, String resourceType, Integer expiresInSeconds) {
+        return buildAuthenticatedUrl(publicId, resourceType, null, expiresInSeconds);
+    }
+    /**
+     * Dựng URL có thời hạn cho file {@code authenticated}, có ép định dạng đầu ra.
+     * <p>
+     * <b>Vì sao cần ép format:</b> file ghi âm được upload với
+     * {@code resource_type=video} (Cloudinary chỉ có {@code audio} dạng
+     * {@code video} + {@code audio_codec}). Cloudinary trả {@code Content-Type}
+     * là {@code video/webm} hoặc {@code video/mp4} → thẻ {@code <audio>} của
+     * trình duyệt KHÔNG phát được (chỉ phát được video). Ép đầu ra
+     * {@code .mp3} để {@code Content-Type} là {@code audio/mpeg} → phát được
+     * trên mọi trình duyệt.
+     * <p>
+     * Với {@code raw} / {@code image} thì bỏ qua format: {@code public_id}
+     * đã chứa sẵn đuôi file (ví dụ {@code .../abc.pdf}).
+     *
+     * @param publicId          public_id của file
+     * @param resourceType      image | raw | video
+     * @param format            định dạng đầu ra (chỉ áp dụng cho video/audio)
+     * @param expiresInSeconds  số giây URL còn hiệu lực (mặc định 15 phút)
+     */
+    public String buildAuthenticatedUrl(String publicId, String resourceType, String format,
+                                        Integer expiresInSeconds) {
         requireConfigured();
         if (publicId == null || publicId.isBlank()) {
             return null;
         }
 
+        String normalizedResourceType = normalizeResourceType(resourceType);
+        // Chỉ file media (video/audio) mới cần ép format đầu ra.
+        String outputFormat = RESOURCE_VIDEO.equals(normalizedResourceType)
+                ? AUDIO_OUTPUT_FORMAT
+                : null;
+
         try {
-            return cloudinary.url()
-                    .resourceType(normalizeResourceType(resourceType))
+            com.cloudinary.Url url = cloudinary.url()
+                    .resourceType(normalizedResourceType)
                     .type(DELIVERY_AUTHENTICATED)
-                    .publicId(publicId)
-                    .signed(true)
-                    .secure(true)
-                    .generate();
+                    .publicId(publicId);
+            if (outputFormat != null) {
+                url = url.format(outputFormat);
+            }
+            return url.signed(true).secure(true).generate();
         } catch (Exception ex) {
             log.warn("Không dựng được URL có thời hạn cho file {}: {}", publicId, ex.getMessage());
             throw new AppException(ErrorCode.CLOUDINARY_UPLOAD_FAILED);

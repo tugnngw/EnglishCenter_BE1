@@ -1166,10 +1166,12 @@ public class CourseServiceImpl implements CourseService {
         /* ---------- V29: luật mở khoá bài thi cuối kỳ ---------- */
         Boolean requiresMentor = null;
         String examLockReason = null;
+        Boolean hasMentorPlan = null;
 
         if (content.getContentType() == ContentType.EXAM) {
             requiresMentor = courseExamContentService.requiresMentorGrading(examId);
             if (isEnrolled && currentUserId != null) {
+                hasMentorPlan = courseExamContentService.hasMentorPlan(currentUserId);
                 long total = courseExamContentService.countLessons(content.getCourse().getCourseId());
                 long done = lessonProgressService.countCompletedLessons(currentUserId,
                         content.getCourse().getCourseId());
@@ -1181,12 +1183,10 @@ public class CourseServiceImpl implements CourseService {
                     // Chưa xem xong hết video → khoá.
                     examLockReason = "lessons";
                     locked = true;
-                } else if (Boolean.TRUE.equals(requiresMentor)
-                        && !courseExamContentService.hasMentorPlan(currentUserId)) {
-                    // Đề có phần tự luận → cần mua gói kèm 1-1 để mentor chấm.
-                    examLockReason = "mentor";
-                    locked = true;
                 }
+                // V30: KHÔNG khoá đề khi học viên chưa mua gói mentor 1-1.
+                // Học viên vẫn làm + nộp được toàn bộ đề; phần tự luận lưu nháp
+                // (awaiting_mentor) cho tới khi nâng cấp gói → mentor chấm tay.
             }
         }
 
@@ -1210,6 +1210,7 @@ public class CourseServiceImpl implements CourseService {
                 .completed(completed)
                 .watchedSeconds(watchedSeconds)
                 .requiresMentor(requiresMentor)
+                .hasMentorPlan(hasMentorPlan)
                 .examLockReason(examLockReason)
                 .completedLessonCount(completedLessonCount)
                 .totalLessonCount(totalLessonCount)

@@ -47,6 +47,7 @@ import com.sba301.englishcenter.service.ExamAccessPolicy;
 import com.sba301.englishcenter.service.ExamAttemptService;
 import com.sba301.englishcenter.service.ExamGrader;
 import com.sba301.englishcenter.service.ExamMapper;
+import com.sba301.englishcenter.service.ExamMentorAssignmentService;
 import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.util.JsonUtil;
 import com.sba301.englishcenter.util.JsonbMapper;
@@ -102,7 +103,8 @@ import java.util.stream.Collectors;
 public class ExamAttemptServiceImpl implements ExamAttemptService {
 
     static final EnumSet<AttemptStatus> FINISHED_STATUSES =
-            EnumSet.of(AttemptStatus.SUBMITTED, AttemptStatus.GRADED, AttemptStatus.EXPIRED);
+            EnumSet.of(AttemptStatus.SUBMITTED, AttemptStatus.GRADED, AttemptStatus.EXPIRED,
+                    AttemptStatus.AWAITING_MENTOR);
 
     private static final int SWEEP_BATCH_SIZE = 100;
 
@@ -122,6 +124,8 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     private final ScoringScaleResolver scoringScaleResolver;
     private final NotificationService notificationService;
     private final PracticeLevelCalculator practiceLevelCalculator;
+    /** V30: quyết định trạng thái lượt thi khi nộp (có mentor chấm tay hay lưu nháp chờ nâng cấp gói). */
+    private final ExamMentorAssignmentService mentorAssignmentService;
     // AI chấm mất 10 - 60 giây mỗi câu: không giữ transaction / khóa dòng trong lúc chờ AI
     private final PlatformTransactionManager transactionManager;
 
@@ -571,8 +575,10 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
         attempt.setEndTime(end);
         attempt.setTimeSpentSeconds((int) Math.max(0, Duration.between(attempt.getStartTime(), end).getSeconds()));
         attempt.setAutoSubmitted(auto);
-        attempt.setStatus(auto ? AttemptStatus.EXPIRED
-                : summary.pendingManual() ? AttemptStatus.SUBMITTED : AttemptStatus.GRADED);
+        // V30: học viên CHƯA mua gói mentor → phần tự luận lưu nháp (awaiting_mentor),
+        // không chặn làm bài. Học viên ĐÃ mua gói → bài vào thẳng hàng đợi chấm của mentor.
+        attempt.setStatus(mentorAssignmentService.resolveSubmitStatus(
+                exam, summary.pendingManual(), attempt.getStudent().getUserId(), auto));
         attemptRepository.save(attempt);
 
         exam.setAverageScore(attemptRepository.averageScoreByExamId(exam.getExamId(), FINISHED_STATUSES)
@@ -670,7 +676,8 @@ public class ExamAttemptServiceImpl implements ExamAttemptService {
     }
 
     private boolean hasPendingManual(ExamAttempt attempt) {
-        if (attempt.getStatus() == AttemptStatus.SUBMITTED) {
+        if (attempt.getStatus() == AttemptStatus.SUBMITTED
+                || attempt.getStatus() == AttemptStatus.AWAITING_MENTOR) {
             return true;
         }
         if (attempt.getStatus() != AttemptStatus.EXPIRED) {

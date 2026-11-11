@@ -10,6 +10,7 @@ import com.sba301.englishcenter.exception.ErrorCode;
 import com.sba301.englishcenter.repository.BookingRepository;
 import com.sba301.englishcenter.repository.MentoringPlanRepository;
 import com.sba301.englishcenter.service.CourseMentorAssignmentService;
+import com.sba301.englishcenter.service.ExamMentorAssignmentService;
 import com.sba301.englishcenter.service.HomeworkGraderAssignmentService;
 import com.sba301.englishcenter.service.MentoringPlanPaymentService;
 import com.sba301.englishcenter.service.NotificationService;
@@ -39,6 +40,7 @@ public class MentoringPlanPaymentServiceImpl implements MentoringPlanPaymentServ
     private final UserService userService;
     private final CourseMentorAssignmentService courseMentorAssignment;
     private final HomeworkGraderAssignmentService graderAssignment;
+    private final ExamMentorAssignmentService examMentorAssignment;
 
     @Override
     @Transactional
@@ -51,6 +53,12 @@ public class MentoringPlanPaymentServiceImpl implements MentoringPlanPaymentServ
         }
         List<Booking> bookings = bookingRepository.findBySchedule_PlanIdOrderBySchedule_StartTimeAsc(planId);
         if (bookings.isEmpty()) {
+            // Gói không có buổi nào → vẫn kích hoạt gói để học viên có mentor 1-1
+            // (bài thi / bài tập đã nộp trước đó vẫn phải được bàn giao cho mentor).
+            plan.setStatus(MentoringPlanStatus.active);
+            plan.setPaidAt(UtcTimeUtil.nowUtc());
+            planRepository.save(plan);
+            backfillAfterPayment(plan);
             return null;
         }
 
@@ -66,25 +74,7 @@ public class MentoringPlanPaymentServiceImpl implements MentoringPlanPaymentServ
         }
         log.info("Mentoring plan {} activated after SePay payment", planId);
 
-        // Học viên đã mua mentor 1-1 → mentor được thêm vào các khóa học học viên đang học
-        // (khóa học tạo ra không có mentor sẵn) → mentor chấm bài tập của học viên trong khóa đó.
-        int assignedCourses = courseMentorAssignment.assignMentorToStudentCourses(
-                plan.getStudentId(), plan.getMentorId());
-        if (assignedCourses > 0) {
-            log.info("Assigned mentor {} to {} course(s) of student {}",
-                    plan.getMentorId(), assignedCourses, plan.getStudentId());
-        }
-
-        // Học viên có thể đã nộp bài TRƯỚC khi mua gói → lúc nộp chưa có mentor,
-        // bài bị gán null (AI chấm). Gán lại mentor cho các bài CHƯA CHẤM để
-        // mentor thấy và chấm tay.
-        int backfilled = graderAssignment.backfillUngradedSubmissions(
-                plan.getStudentId(), plan.getMentorId());
-        if (backfilled > 0) {
-            log.info("Assigned mentor {} to {} pending submission(s) of student {} "
-                    + "(student bought the plan after submitting)",
-                    plan.getMentorId(), backfilled, plan.getStudentId());
-        }
+        backfillAfterPayment(plan);
 
         String studentName = userService.getUserById(plan.getStudentId()).getFullName();
         String mentorName = userService.getUserById(plan.getMentorId()).getFullName();
@@ -95,5 +85,46 @@ public class MentoringPlanPaymentServiceImpl implements MentoringPlanPaymentServ
                 "Học viên " + studentName + " đã thanh toán gói \"" + plan.getTitle() + "\" ("
                         + plan.getTotalSessions() + " buổi).");
         return bookings.get(0).getSchedule().getScheduleId();
+    }
+
+    /**
+     * Học viên đã mua gói mentor 1-1 → bàn giao các bài đã nộp TRƯỚC khi mua gói:
+     * <ul>
+     *   <li>Bài tập (homework): lúc nộp chưa có mentor → AI chấm. Gán lại mentor cho các
+     *       bài CHƯA CHẤM để mentor thấy và chấm tay.</li>
+     *   <li>Bài thi (V30): phần tự luận lưu nháp ở trạng thái {@code awaiting_mentor} →
+     *       chuyển sang {@code submitted} để vào hàng đợi chấm. Học viên KHÔNG phải làm lại bài.</li>
+     * </ul>
+     */
+    private void backfillAfterPayment(MentoringPlan plan) {
+        UUID studentId = plan.getStudentId();
+        UUID mentorId = plan.getMentorId();
+
+        // Học viên đã mua mentor 1-1 → mentor được thêm vào các khóa học học viên đang học
+        // (khóa học tạo ra không có mentor sẵn) → mentor chấm bài tập của học viên trong khóa đó.
+        int assignedCourses = courseMentorAssignment.assignMentorToStudentCourses(studentId, mentorId);
+        if (assignedCourses > 0) {
+            log.info("Assigned mentor {} to {} course(s) of student {}",
+                    mentorId, assignedCourses, studentId);
+        }
+
+        // Học viên có thể đã nộp bài TRƯỚC khi mua gói → lúc nộp chưa có mentor,
+        // bài bị gán null (AI chấm). Gán lại mentor cho các bài CHƯA CHẤM để
+        // mentor thấy và chấm tay.
+        int backfilled = graderAssignment.backfillUngradedSubmissions(studentId, mentorId);
+        if (backfilled > 0) {
+            log.info("Assigned mentor {} to {} pending submission(s) of student {} "
+                    + "(student bought the plan after submitting)",
+                    mentorId, backfilled, studentId);
+        }
+
+        // V30: học viên có thể đã nộp BÀI THI (đề cuối kỳ) trước khi mua gói →
+        // phần tự luận được lưu nháp ở trạng thái 'awaiting_mentor'. Chuyển sang
+        // 'submitted' để mentor thấy và chấm tay. Học viên KHÔNG phải làm lại bài.
+        int backfilledAttempts = examMentorAssignment.backfillAwaitingMentorAttempts(studentId, mentorId);
+        if (backfilledAttempts > 0) {
+            log.info("Moved {} awaiting-mentor attempt(s) of student {} to mentor {} grading queue",
+                    backfilledAttempts, studentId, mentorId);
+        }
     }
 }

@@ -71,6 +71,7 @@ public class HomeworkQueryService {
         return cloudinary.buildAuthenticatedUrl(
                 submission.getFilePublicId(),
                 submission.getFileResourceType(),
+                submission.getFileFormat(),
                 null);
     }
 

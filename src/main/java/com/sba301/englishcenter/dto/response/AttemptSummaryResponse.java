@@ -47,6 +47,13 @@ public class AttemptSummaryResponse {
     Boolean pendingManualGrading;
     Boolean autoSubmitted;
 
+    /**
+     * V30: true khi phần tự luận của lượt thi đang LƯU NHÁP vì học viên chưa mua gói
+     * mentor 1-1. Học viên vẫn xem được điểm phần trắc nghiệm; bài tự luận được giữ nguyên
+     * và chuyển cho mentor chấm tay ngay khi học viên nâng cấp gói — không phải làm lại bài.
+     */
+    Boolean mentorUpgradeRequired;
+
     UUID studentId;
     String studentName;
     String studentEmail;
