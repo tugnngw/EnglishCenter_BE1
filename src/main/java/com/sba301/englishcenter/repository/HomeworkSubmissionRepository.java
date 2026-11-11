@@ -85,29 +85,40 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
      * <p>
      * Điều kiện:
      * <ul>
-     *   <li>Bài được GIAO cho mentor này ({@code assigned_grader_id = :mentorId}) —
+     *   <li>Bài được GIAO cho mentor này ({@code assigned_grader_id}) —
      *       mentor đó là người được giao chấm bài (snapshot lúc học viên nộp);</li>
      *   <li>HOẶC bài CHƯA gán ai của học viên mà mentor này đang có gói kèm 1-1
      *       còn hiệu lực → trường hợp học viên mua gói SAU khi đã nộp bài, hoặc AI
      *       chấm lỗi. Bài này không có ai chấm nên mentor phải tiếp tục được thấy.</li>
+     *   <li>HOẶC bài do CHÍNH mentor này tạo (bài tập riêng của mentor, V27).</li>
      * </ul>
      * Học viên KHÔNG mua mentor → AI chấm tự động → không có trong hàng đợi của mentor.
      * <p>
      * Bài TRẮC NGHIỆM (Nhóm A) bị loại ở đây — hệ thống tự chấm, mentor chỉ xem
      * bảng thống kê kết quả làm bài.
+     * <p>
+     * Tham số {@code source} lọc theo nguồn bài tập:
+     * {@code all} (mặc định) | {@code course} (bài mặc định của khóa do admin tạo)
+     * | {@code mentor} (bài mentor tự tạo và gửi cho học viên).
      */
     @EntityGraph(attributePaths = {"homeworkContent", "homeworkContent.course", "student"})
     @Query("select s from HomeworkSubmission s "
+            + "left join s.homeworkContent hc left join hc.course c "
             + "where s.gradedDate is null "
             + "and (s.assignedGraderId = :mentorId "
+            + "   or hc.ownerMentorId = :mentorId "
             + "   or (s.assignedGraderId is null and exists (select 1 from MentoringPlan p "
             + "      where p.mentorId = :mentorId and p.studentId = s.student.userId "
             + "      and p.status in :planStatuses))) "
             + "and (s.submissionType is null or lower(s.submissionType) <> 'multiple_choice') "
+            + "and (:source = 'all' "
+            + "   or (:source = 'course' and c is not null) "
+            + "   or (:source = 'mentor' and c is null)) "
             + "order by s.submittedDate desc")
     Page<HomeworkSubmission> findPendingGradingForMentorWithStudents(
             @Param("mentorId") UUID mentorId,
             @Param("planStatuses") java.util.Collection<com.sba301.englishcenter.common.enums.MentoringPlanStatus> planStatuses,
+            @Param("source") String source,
             Pageable pageable);
 
     /** Tất cả bài nộp của các khóa học mà mentor này phụ trách. */
@@ -120,22 +131,29 @@ public interface HomeworkSubmissionRepository extends JpaRepository<HomeworkSubm
     /**
      * Tất cả bài mentor này được phép chấm: bài được GIAO ({@code assigned_grader_id})
      * + bài CHƯA gán ai của khóa học mentor phụ trách hoặc của học viên mentor
-     * dạy kèm 1-1 (fallback khi AI chấm lỗi).
+     * dạy kèm 1-1 (fallback khi AI chấm lỗi) + bài do chính mentor này tạo.
      * <p>
      * Bài trắc nghiệm (Nhóm A) vẫn trả về — mentor xem để thống kê, không chấm tay.
+     * <p>
+     * Tham số {@code source} lọc theo nguồn bài tập (xem
+     * {@link #findPendingGradingForMentorWithStudents}).
      */
     @EntityGraph(attributePaths = {"homeworkContent", "homeworkContent.course", "student"})
     @Query("select s from HomeworkSubmission s "
             // Join tường minh từng bước: bài tập của mentor (V27) không có khóa học (course NULL) vẫn phải ra
-            + "left join s.homeworkContent hc left join hc.course c left join c.mentor m "
+            + "left join s.homeworkContent hc left join hc.course c "
             + "where (s.assignedGraderId = :mentorId "
-            + " or (s.assignedGraderId is null and (m.userId = :mentorId "
-            + "   or exists (select 1 from MentoringPlan p "
+            + " or hc.ownerMentorId = :mentorId "
+            + " or (s.assignedGraderId is null and exists (select 1 from MentoringPlan p "
             + "      where p.mentorId = :mentorId and p.studentId = s.student.userId "
-            + "      and p.status in :planStatuses)))) "
+            + "      and p.status in :planStatuses))) "
+            + "and (:source = 'all' "
+            + "   or (:source = 'course' and c is not null) "
+            + "   or (:source = 'mentor' and c is null)) "
             + "order by s.submittedDate desc")
     Page<HomeworkSubmission> findAllForMentorWithStudents(
             @Param("mentorId") UUID mentorId,
             @Param("planStatuses") java.util.Collection<com.sba301.englishcenter.common.enums.MentoringPlanStatus> planStatuses,
+            @Param("source") String source,
             Pageable pageable);
 }

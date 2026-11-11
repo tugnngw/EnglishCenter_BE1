@@ -6,6 +6,7 @@ import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.common.enums.NotificationType;
 import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.common.enums.ExamScope;
+import com.sba301.englishcenter.common.enums.MentoringPlanStatus;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.common.enums.RoleName;
 import com.sba301.englishcenter.dto.request.GradeAnswerRequest;
@@ -28,6 +29,7 @@ import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.security.UserPrincipal;
 import com.sba301.englishcenter.service.ExamGrader;
 import com.sba301.englishcenter.service.ExamGradingService;
+import com.sba301.englishcenter.service.HomeworkGraderAssignmentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -53,6 +55,13 @@ public class ExamGradingServiceImpl implements ExamGradingService {
     private static final EnumSet<AttemptStatus> GRADABLE_STATUSES =
             EnumSet.of(AttemptStatus.SUBMITTED, AttemptStatus.EXPIRED);
 
+    /**
+     * Trạng thái gói kèm 1-1 tính là "đã mua" → mentor 1-1 của học viên được
+     * chấm phần tự luận của đề cuối kỳ (V29).
+     */
+    private static final EnumSet<MentoringPlanStatus> PLAN_STATUSES =
+            EnumSet.of(MentoringPlanStatus.active, MentoringPlanStatus.completed);
+
     private final ExamRepository examRepository;
     private final ExamAttemptRepository attemptRepository;
     private final ExamAnswerRepository answerRepository;
@@ -61,6 +70,8 @@ public class ExamGradingServiceImpl implements ExamGradingService {
     private final ExamGrader grader;
     private final ExamMapper examMapper;
     private final NotificationService notificationService;
+    /** Tra cứu mentor 1-1 của học viên (V29) — mentor đó chấm phần tự luận của đề cuối kỳ. */
+    private final HomeworkGraderAssignmentService mentorAssignmentService;
 
     @Override
     @Transactional(readOnly = true)
@@ -68,8 +79,9 @@ public class ExamGradingServiceImpl implements ExamGradingService {
         UserPrincipal grader = currentPrincipal();
         Page<ExamAttempt> page = isAdmin(grader)
                 ? attemptRepository.findPendingManualGrading(GRADABLE_STATUSES, QuestionType.ESSAY, pageable)
-                : attemptRepository.findPendingManualGradingForMentor(GRADABLE_STATUSES, QuestionType.ESSAY,
-                        ExamScope.TRIAL, grader.getUserId(), pageable);
+                : attemptRepository.findPendingManualGradingForMentorWithPlans(
+                        GRADABLE_STATUSES, QuestionType.ESSAY, ExamScope.TRIAL,
+                        grader.getUserId(), PLAN_STATUSES, pageable);
 
         return PageResponse.<AttemptSummaryResponse>builder()
                 .currentPage(page.getNumber())
@@ -87,7 +99,7 @@ public class ExamGradingServiceImpl implements ExamGradingService {
     public AttemptResultResponse getAttemptForGrading(UUID attemptId) {
         ExamAttempt attempt = attemptRepository.findById(attemptId)
                 .orElseThrow(() -> new AppException(ErrorCode.ATTEMPT_NOT_FOUND));
-        assertCanGrade(attempt.getExam());
+        assertCanGrade(attempt.getExam(), attempt);
         if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) {
             throw new AppException(ErrorCode.ATTEMPT_NOT_SUBMITTED);
         }
@@ -103,7 +115,7 @@ public class ExamGradingServiceImpl implements ExamGradingService {
         ExamAttempt attempt = attemptRepository.findByIdForUpdate(attemptId)
                 .orElseThrow(() -> new AppException(ErrorCode.ATTEMPT_NOT_FOUND));
         Exam exam = attempt.getExam();
-        assertCanGrade(exam);
+        assertCanGrade(exam, attempt);
         if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) {
             throw new AppException(ErrorCode.ATTEMPT_NOT_SUBMITTED);
         }
@@ -177,6 +189,21 @@ public class ExamGradingServiceImpl implements ExamGradingService {
 
     /** Admin chấm mọi đề; mentor chấm mọi đề thi thử (trial) và đề của khóa học mình phụ trách. */
     private void assertCanGrade(Exam exam) {
+        assertCanGrade(exam, null);
+    }
+
+    /**
+     * Quyền chấm:
+     * <ul>
+     *   <li>Admin: chấm mọi đề;</li>
+     *   <li>Mentor phụ trách khóa: chấm đề của khóa mình;</li>
+     *   <li>Mentor 1-1 của HỌC VIÊN (V29): chấm phần tự luận của đề cuối kỳ mà
+     *       học viên đó làm — vì đề này BẮT BUỘC có mentor chấm tay.</li>
+     * </ul>
+     *
+     * @param attempt lượt thi (dùng để biết học viên là ai); null = không kiểm tra theo học viên.
+     */
+    private void assertCanGrade(Exam exam, ExamAttempt attempt) {
         UserPrincipal principal = currentPrincipal();
         if (isAdmin(principal)) {
             return;
@@ -189,9 +216,20 @@ public class ExamGradingServiceImpl implements ExamGradingService {
                 && exam.getCourse() != null
                 && exam.getCourse().getMentor() != null
                 && exam.getCourse().getMentor().getUserId().equals(principal.getUserId());
-        if (!isCourseMentor) {
-            throw new AppException(ErrorCode.UNAUTHORIZED);
+        if (isCourseMentor) {
+            return;
         }
+        // V29: mentor 1-1 của học viên được chấm đề cuối kỳ của học viên đó.
+        if (isMentor && attempt != null && attempt.getStudent() != null) {
+            UUID studentId = attempt.getStudent().getUserId();
+            boolean isStudentMentor = mentorAssignmentService.findAssignedMentorId(studentId)
+                    .map(id -> id.equals(principal.getUserId()))
+                    .orElse(false);
+            if (isStudentMentor) {
+                return;
+            }
+        }
+        throw new AppException(ErrorCode.UNAUTHORIZED);
     }
 
     private Map<UUID, ExamAnswer> answersByQuestion(UUID attemptId) {

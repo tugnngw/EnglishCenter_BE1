@@ -2,6 +2,8 @@ package com.sba301.englishcenter.service;
 
 import com.sba301.englishcenter.dto.response.HomeworkGradeHistoryResponse;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
+import com.sba301.englishcenter.entity.Course;
+import com.sba301.englishcenter.entity.CourseContent;
 import com.sba301.englishcenter.entity.HomeworkGradeHistory;
 import com.sba301.englishcenter.entity.HomeworkSubmission;
 import lombok.AccessLevel;
@@ -37,12 +39,19 @@ public final class HomeworkSubmissionMapper {
 
         boolean graded = submission.getGradedDate() != null;
 
+        CourseContent homework = submission.getHomeworkContent();
+        Course course = homework != null ? homework.getCourse() : null;
+        // Nguồn bài tập: "course" (bài mặc định của khóa do admin tạo) hoặc "mentor" (bài mentor tự tạo).
+        String homeworkSource = (homework != null && homework.getCourse() == null
+                && homework.getOwnerMentorId() != null) ? "mentor" : "course";
+
         return HomeworkSubmissionResponse.builder()
                 .submissionId(submission.getSubmissionId())
-                .homeworkContentId(submission.getHomeworkContent() != null
-                        ? submission.getHomeworkContent().getContentId() : null)
-                .homeworkTitle(submission.getHomeworkContent() != null
-                        ? submission.getHomeworkContent().getTitle() : null)
+                .homeworkContentId(homework != null ? homework.getContentId() : null)
+                .homeworkTitle(homework != null ? homework.getTitle() : null)
+                .homeworkSource(homeworkSource)
+                .courseId(course != null ? course.getCourseId() : null)
+                .courseTitle(course != null ? course.getTitle() : null)
                 .studentId(student != null ? student.userId() : null)
                 .studentName(student != null ? student.fullName() : null)
                 .studentEmail(student != null ? student.email() : null)

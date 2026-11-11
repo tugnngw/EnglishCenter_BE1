@@ -60,11 +60,13 @@ public class HomeworkSubmissionQueryController {
     @PreAuthorize("hasRole('MENTOR')")
     @Operation(summary = "Grading queue",
             description = "Homework submissions assigned to this mentor (student bought the 1-1 mentor plan) "
-                    + "+ unassigned ones of their courses as AI-grading fallback. pendingOnly=true \u2192 only ungraded")
+                    + "+ unassigned ones of their courses as AI-grading fallback. pendingOnly=true \u2192 only ungraded. "
+                    + "source=all|course|mentor để tách bài tập của khóa (admin tạo) và bài tập mentor tự tạo")
     public PageResponse<HomeworkSubmissionResponse> getQueue(
             @RequestParam(defaultValue = "true") boolean pendingOnly,
+            @RequestParam(defaultValue = "all") String source,
             @PageableDefault(size = 20, sort = "submittedDate", direction = Sort.Direction.DESC) Pageable pageable) {
-        return queryService.getMentorQueue(pageable, pendingOnly);
+        return queryService.getMentorQueue(pageable, pendingOnly, source);
     }
 
     @GetMapping("/api/v1/mentor/homework-submissions/{submissionId}")

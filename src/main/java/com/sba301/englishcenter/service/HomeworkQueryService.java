@@ -108,12 +108,17 @@ public class HomeworkQueryService {
      *       gói mentor 1-1 của mentor này → mentor đó chấm;</li>
      *   <li>Bài CHƯA gán ai của khóa học mentor phụ trách, hoặc của học viên mentor
      *       đang dạy kèm 1-1 → bình thường AI chấm, nhưng nếu AI lỗi thì mentor
-     *       chấm tay được (fallback).</li>
+     *       chấm tay được (fallback);</li>
+     *   <li>Bài do CHÍNH mentor này tạo (bài tập riêng của mentor, V27).</li>
      * </ul>
      * Admin KHÔNG chấm bài tập → không có nhánh admin ở đây.
+     *
+     * @param source lọc theo nguồn bài tập:
+     *               {@code all} (mặc định) | {@code course} (bài mặc định của khóa
+     *               do admin tạo) | {@code mentor} (bài mentor tự tạo và gửi học viên)
      */
     @Transactional(readOnly = true)
-    public PageResponse<HomeworkSubmissionResponse> getMentorQueue(Pageable pageable, boolean pendingOnly) {
+    public PageResponse<HomeworkSubmissionResponse> getMentorQueue(Pageable pageable, boolean pendingOnly, String source) {
         UserPrincipal principal = SecurityUtils.getCurrentUserPrincipal()
                 .orElseThrow(() -> new AppException(ErrorCode.UNAUTHENTICATED));
 
@@ -123,11 +128,12 @@ public class HomeworkQueryService {
         }
 
         UUID mentorId = principal.getUserId();
+        String normalizedSource = normalizeSource(source);
         Page<HomeworkSubmission> page = pendingOnly
                 ? submissionRepository.findPendingGradingForMentorWithStudents(
-                        mentorId, MENTOR_PLAN_STATUSES, pageable)
+                        mentorId, MENTOR_PLAN_STATUSES, normalizedSource, pageable)
                 : submissionRepository.findAllForMentorWithStudents(
-                        mentorId, MENTOR_PLAN_STATUSES, pageable);
+                        mentorId, MENTOR_PLAN_STATUSES, normalizedSource, pageable);
 
         return PageResponse.<HomeworkSubmissionResponse>builder()
                 .currentPage(page.getNumber())
@@ -139,6 +145,21 @@ public class HomeworkQueryService {
                         .map(s -> HomeworkSubmissionMapper.toResponse(s, buildFileUrl(s), null))
                         .toList())
                 .build();
+    }
+
+    /**
+     * Chuẩn hoá tham số {@code source}: chỉ nhận {@code all} / {@code course} / {@code mentor}.
+     * Giá trị lạ → {@code all} (không lọc) để không mất bài nào khỏi hàng đợi.
+     */
+    private String normalizeSource(String source) {
+        if (source == null || source.isBlank()) {
+            return "all";
+        }
+        String value = source.trim().toLowerCase();
+        return switch (value) {
+            case "course", "mentor", "all" -> value;
+            default -> "all";
+        };
     }
 
     /**

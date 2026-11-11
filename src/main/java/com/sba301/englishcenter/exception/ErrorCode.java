@@ -70,6 +70,25 @@ public enum ErrorCode {
     COURSE_CONTENT_EXAM_REQUIRED(3015,
             "Bài tập trắc nghiệm phải liên kết một đề thi của khóa học",
             HttpStatus.BAD_REQUEST),
+    // === Dev 2 (V29) - Nội dung "Bài thi cuối kỳ" + tiến độ video ===
+    COURSE_CONTENT_EXAM_NOT_FINAL(3016,
+            "Nội dung bài thi chỉ được liên kết đề thi CUỐI KỲ (final) trong kho đề thi",
+            HttpStatus.BAD_REQUEST),
+    COURSE_CONTENT_EXAM_NOT_OWNED(3017,
+            "Đề thi phải thuộc đúng khóa học đang chỉnh sửa",
+            HttpStatus.BAD_REQUEST),
+    EXAM_CONTENT_LOCKED(3018,
+            "Bài thi cuối kỳ chỉ mở sau khi bạn học xong tất cả bài học của khóa",
+            HttpStatus.FORBIDDEN),
+    EXAM_CONTENT_MENTOR_REQUIRED(3019,
+            "Bài thi có phần tự luận cần mentor chấm — bạn cần mua gói kèm 1-1 để mở phần này",
+            HttpStatus.FORBIDDEN),
+    LESSON_PROGRESS_NOT_FOUND(3034,
+            "Chưa có dữ liệu tiến độ cho bài học này",
+            HttpStatus.NOT_FOUND),
+    LESSON_PROGRESS_INVALID(3035,
+            "Dữ liệu tiến độ xem video không hợp lệ",
+            HttpStatus.BAD_REQUEST),
     // === Dev 4 - Payment & Enrollment ===
     PAYMENT_ORDER_NOT_FOUND(4001, "Không tìm thấy đơn thanh toán", HttpStatus.NOT_FOUND),
     COURSE_NOT_PURCHASABLE(4002, "Khóa học chưa mở bán hoặc giá không hợp lệ", HttpStatus.BAD_REQUEST),
@@ -213,6 +232,8 @@ public enum ErrorCode {
     RESCHEDULE_REQUEST_NOT_FOUND(6059, "Buổi học này không có yêu cầu dời lịch đang chờ", HttpStatus.BAD_REQUEST),
     MENTOR_HOMEWORK_PLAN_REQUIRED(6058, "Bài tập của mentor chỉ dành cho học viên đã mua gói kèm 1-1", HttpStatus.FORBIDDEN),
     CONSULTATION_SLOT_INVALID(6051, "Khung giờ rảnh không hợp lệ: giờ kết thúc phải sau giờ bắt đầu", HttpStatus.BAD_REQUEST),
+    // Bài tập của khóa học chỉ mở khi học viên đã mua gói kèm 1-1
+    HOMEWORK_MENTOR_PLAN_REQUIRED(6060, "Bài tập của khóa học chỉ dành cho học viên đã mua gói kèm 1-1", HttpStatus.FORBIDDEN),
     ;
 
     private final int code;

@@ -36,6 +36,8 @@ import java.util.UUID;
 public class ExamAccessPolicy {
 
     private final SessionEnrollmentChecker enrollmentChecker;
+    /** Luật mở khoá nội dung "Bài thi cuối kỳ" (V29) — video + mentor 1-1. */
+    private final CourseExamContentService courseExamContentService;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -108,6 +110,22 @@ public class ExamAccessPolicy {
                 if (courseId == null
                         || !enrolled.computeIfAbsent(courseId, id -> enrollmentChecker.isEnrolled(userId, id))) {
                     return Optional.of(Denial.of(ErrorCode.EXAM_ENROLLMENT_REQUIRED));
+                }
+                // V29: đề được gắn vào nội dung 'exam' của khóa → áp luật mở khoá
+                // (xem xong hết video + mua gói kèm 1-1 nếu có phần tự luận).
+                String lockReason = courseExamContentService.findLockReason(exam.getExamId(), userId);
+                if ("lessons".equals(lockReason)) {
+                    return Optional.of(Denial.of(ErrorCode.EXAM_CONTENT_LOCKED));
+                }
+                if ("mentor".equals(lockReason)) {
+                    return Optional.of(Denial.of(ErrorCode.EXAM_CONTENT_MENTOR_REQUIRED));
+                }
+                // V29: đề được gắn vào nội dung 'exam' của khóa → luật mở khoá của
+                // nội dung này (xem xong hết video + mở khoá mentor 1-1) là luật
+                // DUY NHẤT áp dụng → bỏ luật thi nối tiếp (đạt giữa kỳ + đủ bài tập),
+                // vì luật thi nối tiếp sẽ chặn ngược lại đề cuối kỳ của khóa.
+                if (courseExamContentService.isExamContent(exam)) {
+                    return Optional.empty();
                 }
                 return checkPrerequisites(courseId, exam.getExamType());
             }

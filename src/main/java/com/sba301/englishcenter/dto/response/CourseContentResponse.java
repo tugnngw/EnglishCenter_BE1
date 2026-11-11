@@ -77,4 +77,35 @@ public class CourseContentResponse {
      * gán vào khóa học qua {@code course_vocabulary_sets}.
      */
     List<String> vocabularySetIds;
+
+    /**
+     * Học viên đã xem xong bài học (video) này chưa (V29).
+     * <p>
+     * Chỉ có giá trị khi {@code contentType = 'lesson'} và người xem đã ghi danh
+     * khóa học. Dùng để tick "Hoàn thành" ở danh sách bài học.
+     */
+    Boolean completed;
+
+    /** Mốc giây đã xem tối đa của video (chống tua) — học viên đang xem. */
+    Integer watchedSeconds;
+
+    /**
+     * Đề cuối kỳ này có phần tự luận (Writing/Speaking) cần mentor chấm tay không.
+     * <p>
+     * Chỉ có giá trị khi {@code contentType = 'exam'}. {@code true} → học viên
+     * phải mua gói kèm 1-1 mới làm được phần này.
+     */
+    Boolean requiresMentor;
+
+    /**
+     * Lý do bài thi cuối kỳ bị khoá (null = đã mở).
+     * <p>
+     * Giá trị: {@code "lessons"} = chưa xem xong hết video của khóa;
+     * {@code "mentor"} = cần mở khoá mentor để chấm phần tự luận.
+     */
+    String examLockReason;
+
+    /** Số video của khóa học mà học viên đã xem xong / tổng số video. */
+    Integer completedLessonCount;
+    Integer totalLessonCount;
 }

@@ -2,6 +2,7 @@ package com.sba301.englishcenter.repository;
 
 import com.sba301.englishcenter.common.enums.AttemptStatus;
 import com.sba301.englishcenter.common.enums.ExamScope;
+import com.sba301.englishcenter.common.enums.MentoringPlanStatus;
 import com.sba301.englishcenter.common.enums.QuestionType;
 import com.sba301.englishcenter.entity.ExamAttempt;
 import jakarta.persistence.LockModeType;
@@ -126,4 +127,35 @@ public interface ExamAttemptRepository extends JpaRepository<ExamAttempt, UUID> 
                                                         @Param("trial") ExamScope trial,
                                                         @Param("mentorId") UUID mentorId,
                                                         Pageable pageable);
+
+    /**
+     * Hàng đợi chấm tay của mentor 1-1 của HỌC VIÊN (V29).
+     * <p>
+     * Ngoài đề trial và đề của khóa mà mentor phụ trách, mentor còn thấy các
+     * lượt thi của đề CUỐI KỲ mà học viên đã mua gói kèm 1-1 với họ — vì phần
+     * tự luận (Writing/Speaking) BẮT BUỘC mentor chấm tay.
+     */
+    @EntityGraph(attributePaths = {"exam", "student"})
+    @Query(value = "select a from ExamAttempt a left join a.exam e left join e.course c left join c.mentor m "
+            + "where a.status in :statuses and (e.examScope = :trial or m.userId = :mentorId "
+            + " or exists (select 1 from MentoringPlan p where p.studentId = a.student.userId "
+            + "   and p.mentorId = :mentorId and p.status in :planStatuses)) and exists ("
+            + "select 1 from ExamAnswer d where d.attempt = a and d.question.questionType = "
+            + ":essay "
+            + "and d.manualScore is null and d.answerText is not null and length(trim(d.answerText)) > 0) "
+            + "order by a.endTime asc",
+            countQuery = "select count(a) from ExamAttempt a left join a.exam e left join e.course c left join c.mentor m "
+                    + "where a.status in :statuses and (e.examScope = :trial or m.userId = :mentorId "
+                    + " or exists (select 1 from MentoringPlan p where p.studentId = a.student.userId "
+                    + "   and p.mentorId = :mentorId and p.status in :planStatuses)) and exists ("
+                    + "select 1 from ExamAnswer d where d.attempt = a and d.question.questionType = "
+                    + ":essay "
+                    + "and d.manualScore is null and d.answerText is not null and length(trim(d.answerText)) > 0)")
+    Page<ExamAttempt> findPendingManualGradingForMentorWithPlans(
+            @Param("statuses") Collection<AttemptStatus> statuses,
+            @Param("essay") QuestionType essay,
+            @Param("trial") ExamScope trial,
+            @Param("mentorId") UUID mentorId,
+            @Param("planStatuses") Collection<MentoringPlanStatus> planStatuses,
+            Pageable pageable);
 }

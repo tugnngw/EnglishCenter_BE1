@@ -8,7 +8,6 @@ import com.sba301.englishcenter.dto.request.GradeHomeworkSubmissionRequest;
 import com.sba301.englishcenter.dto.request.RubricScoreInput;
 import com.sba301.englishcenter.dto.response.HomeworkGradeHistoryResponse;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
-import com.sba301.englishcenter.entity.Course;
 import com.sba301.englishcenter.entity.CourseContent;
 import com.sba301.englishcenter.entity.HomeworkGradeHistory;
 import com.sba301.englishcenter.entity.HomeworkSubmission;
@@ -198,11 +197,15 @@ public class HomeworkGradingService {
      * <ul>
      *   <li>Mentor được GIAO chấm bài này (mentor 1-1 của học viên, snapshot lúc nộp)
      *       → chấm được;</li>
-     *   <li>Mentor phụ trách khóa học (course.mentor) → chấm được bài của khóa đó;</li>
+     *   <li>Mentor là NGƯỜI TẠO bài tập này (bài tập riêng của mentor, V27) → chấm được;</li>
      *   <li>Mentor đang dạy kèm 1-1 cho học viên (gói mentoring_plans còn hiệu lực)
-     *       → chấm được bài của học viên đó.</li>
+     *       → chấm được bài của học viên đó (kể cả bài nộp trước khi mua gói).</li>
      * </ul>
      * Admin KHÔNG tham gia chấm bài tập.
+     * <p>
+     * <b>Chống chấm nhầm:</b> nếu bài ĐÃ được gán cho mentor khác (học viên mua
+     * gói 1-1 với mentor đó) → mentor khác KHÔNG được chấm. Mỗi học viên có
+     * mentor riêng, khóa học dùng chung nên không ai chấm bài của học viên khác.
      */
     public void assertCanGrade(HomeworkSubmission submission, UserPrincipal principal) {
         if (!"MENTOR".equalsIgnoreCase(principal.getRoleName())) {
@@ -210,19 +213,21 @@ public class HomeworkGradingService {
         }
         UUID mentorId = principal.getUserId();
 
+        CourseContent homework = submission != null ? submission.getHomeworkContent() : null;
+
         // 1) Mentor được giao chấm chính bài này (ưu tiên cao nhất).
         if (submission != null && mentorId.equals(submission.getAssignedGraderId())) {
             return;
         }
-        CourseContent homework = submission != null ? submission.getHomeworkContent() : null;
-        Course course = homework != null ? homework.getCourse() : null;
-
-        // 2) Mentor phụ trách khóa học.
-        if (course != null && course.getMentor() != null
-                && mentorId.equals(course.getMentor().getUserId())) {
+        // 2) Mentor là NGƯỜI TẠO bài tập này (bài riêng của mentor) → chấm được.
+        if (homework != null && mentorId.equals(homework.getOwnerMentorId())) {
             return;
         }
-        // 3) Mentor dạy kèm 1-1 cho học viên này.
+        // 3) Bài đã gán cho mentor KHÁC → không ai khác chấm được.
+        if (submission != null && submission.getAssignedGraderId() != null) {
+            throw new AppException(ErrorCode.UNAUTHORIZED);
+        }
+        // 4) Mentor dạy kèm 1-1 cho học viên này.
         UUID studentId = submission != null && submission.getStudent() != null
                 ? submission.getStudent().getUserId() : null;
         if (studentId != null && planRepository.existsByMentorIdAndStudentIdAndStatusIn(

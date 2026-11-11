@@ -7,6 +7,7 @@ import com.sba301.englishcenter.entity.HomeworkSubmission;
 import com.sba301.englishcenter.entity.MentoringPlan;
 import com.sba301.englishcenter.repository.HomeworkSubmissionRepository;
 import com.sba301.englishcenter.repository.MentoringPlanRepository;
+import com.sba301.englishcenter.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -45,6 +46,7 @@ public class HomeworkGraderAssignmentService {
      */
     private final MentoringPlanRepository planRepository;
     private final HomeworkSubmissionRepository submissionRepository;
+    private final UserRepository userRepository;
 
     /**
      * Mentor sẽ chấm bài cho học viên này (nếu học viên đã mua gói 1-1).
@@ -79,6 +81,17 @@ public class HomeworkGraderAssignmentService {
     }
 
     /**
+     * Tên hiển thị của mentor 1-1 của học viên (null = chưa mua gói / không tìm thấy user).
+     */
+    @Transactional(readOnly = true)
+    public String findAssignedMentorName(UUID studentId) {
+        return findAssignedMentorId(studentId)
+                .map(mentorId -> userRepository.findById(mentorId).orElse(null))
+                .map(user -> user.getFullName())
+                .orElse(null);
+    }
+
+    /**
      * Ai chấm bài này: mentor (nếu học viên đã mua) hay AI.
      */
     @Transactional(readOnly = true)
@@ -89,13 +102,20 @@ public class HomeworkGraderAssignmentService {
     /**
      * Gán mentor chấm cho một bài nộp (snapshot lúc nộp).
      * <p>
-     * Bài nộp không có mentor nào → {@code assignedGraderId} = null (AI sẽ chấm).
+     * Quy tắc:
+     * <ul>
+     *   <li>Bài tập của MENTOR tạo ({@code course_content.course_id = NULL}, có
+     *       {@code owner_mentor_id}) → người tạo bài đó chấm, KHÔNG phải mentor
+     *       1-1 của học viên (nếu khác người tạo);</li>
+     *   <li>Bài tập thuộc KHÓA HỌC (admin tạo) → mentor 1-1 của học viên chấm
+     *       (null nếu học viên chưa mua gói → AI chấm).</li>
+     * </ul>
      *
      * @return id mentor được giao, hoặc null nếu không có → AI chấm
      */
     @Transactional(readOnly = true)
     public UUID assignGrader(HomeworkSubmission submission, UUID studentId) {
-        UUID mentorId = findAssignedMentorId(studentId).orElse(null);
+        UUID mentorId = resolveGraderForHomework(submission, studentId);
         if (submission != null) {
             submission.setAssignedGraderId(mentorId);
             submission.setGradedByType(mentorId != null
@@ -103,6 +123,24 @@ public class HomeworkGraderAssignmentService {
                     : HomeworkGraderType.ai.name());
         }
         return mentorId;
+    }
+
+    /**
+     * Mentor sẽ chấm bài nộp này:
+     * <ul>
+     *   <li>Bài của mentor tạo → người tạo bài ({@code ownerMentorId});</li>
+     *   <li>Bài của khóa học → mentor 1-1 của học viên (nếu đã mua gói).</li>
+     * </ul>
+     */
+    @Transactional(readOnly = true)
+    public UUID resolveGraderForHomework(HomeworkSubmission submission, UUID studentId) {
+        if (submission != null && submission.getHomeworkContent() != null) {
+            CourseContent homework = submission.getHomeworkContent();
+            if (homework.getCourse() == null && homework.getOwnerMentorId() != null) {
+                return homework.getOwnerMentorId();
+            }
+        }
+        return findAssignedMentorId(studentId).orElse(null);
     }
 
     /**
@@ -146,7 +184,8 @@ public class HomeworkGraderAssignmentService {
      * Mentor được giao chấm một bài nộp cụ thể (dùng khi mentor mở bài để chấm).
      * <p>
      * Ưu tiên {@code assigned_grader_id} (snapshot lúc nộp). Nếu bài cũ chưa có snapshot
-     * → fallback về mentor 1-1 hiện tại của học viên.
+     * → fallback về người tạo bài (nếu là bài riêng của mentor) hoặc mentor 1-1
+     * hiện tại của học viên.
      */
     @Transactional(readOnly = true)
     public Optional<UUID> resolveGraderId(HomeworkSubmission submission) {
@@ -159,7 +198,7 @@ public class HomeworkGraderAssignmentService {
         UUID studentId = submission.getStudent() != null
                 ? submission.getStudent().getUserId()
                 : null;
-        return findAssignedMentorId(studentId);
+        return Optional.ofNullable(resolveGraderForHomework(submission, studentId));
     }
 
     /**

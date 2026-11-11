@@ -20,6 +20,7 @@ import com.sba301.englishcenter.entity.Course;
 import com.sba301.englishcenter.entity.CourseContent;
 import com.sba301.englishcenter.entity.CourseVocabularySet;
 import com.sba301.englishcenter.entity.Exam;
+import com.sba301.englishcenter.entity.LessonProgress;
 import com.sba301.englishcenter.entity.User;
 import com.sba301.englishcenter.entity.VocabularySet;
 import com.sba301.englishcenter.entity.VocabularySetWord;
@@ -37,11 +38,15 @@ import com.sba301.englishcenter.repository.UserRepository;
 import com.sba301.englishcenter.repository.VocabularySetRepository;
 import com.sba301.englishcenter.security.SecurityUtils;
 import com.sba301.englishcenter.service.CourseService;
+import com.sba301.englishcenter.service.CourseExamContentService;
 import com.sba301.englishcenter.service.HomeworkContentData;
+import com.sba301.englishcenter.service.HomeworkGraderAssignmentService;
+import com.sba301.englishcenter.service.LessonProgressService;
 import com.sba301.englishcenter.service.NotificationService;
 import com.sba301.englishcenter.specification.CourseSpecification;
 import com.sba301.englishcenter.util.CourseRules;
 import com.sba301.englishcenter.common.enums.ExamStatus;
+import com.sba301.englishcenter.common.enums.ExamScope;
 import com.sba301.englishcenter.common.enums.ExamType;
 import com.sba301.englishcenter.util.JsonUtil;
 import com.sba301.englishcenter.util.SessionEnrollmentChecker;
@@ -89,6 +94,12 @@ public class CourseServiceImpl implements CourseService {
     private final SessionEnrollmentChecker enrollmentChecker;
     /** Gửi thông báo cho mentor khi Admin giao bài tập cần chấm tay. */
     private final NotificationService notificationService;
+    /** Quy tắc "đã mua gói mentor 1-1" — quyết định mở tab Bài tập + tên mentor hiển thị. */
+    private final HomeworkGraderAssignmentService graderAssignmentService;
+    /** Tiến độ xem video (V29) — tick hoàn thành + điều kiện mở bài thi cuối kỳ. */
+    private final LessonProgressService lessonProgressService;
+    /** Luật mở khoá nội dung "Bài thi cuối kỳ" (V29). */
+    private final CourseExamContentService courseExamContentService;
 
     @Override
     @Transactional(readOnly = true)
@@ -169,10 +180,17 @@ public class CourseServiceImpl implements CourseService {
 
         Certificate certificate = resolveCertificate(request.getCertificateId());
         CertificatePart certificatePart = resolveCertificatePart(request.getCertificatePartId());
-        User mentor = resolveMentor(request.getMentorId());
         CourseRules.validatePartBelongsTo(certificate, certificatePart);
         CourseRules.validateScores(certificate, certificatePart, request.getEntryScore(), request.getTargetScore());
         CourseRules.validatePrice(request.getPrice());
+
+        // Quy tắc: khóa học do Admin tạo RA KHÔNG có mentor sẵn.
+        // Mentor chỉ được gán vào khóa sau khi học viên mua gói kèm 1-1
+        // (xem CourseMentorAssignmentService) → nên BỎ QUA mentorId trong request.
+        if (request.getMentorId() != null) {
+            log.info("Bỏ qua mentorId khi tạo khóa học {} — khóa học không gán mentor sẵn",
+                    request.getCode());
+        }
 
         Course course = Course.builder()
                 .code(code)
@@ -187,7 +205,7 @@ public class CourseServiceImpl implements CourseService {
                 .createdByUser(creator)
                 .certificate(certificate)
                 .certificatePart(certificatePart)
-                .mentor(mentor)
+                .mentor(null)
                 .build();
 
         try {
@@ -257,7 +275,11 @@ public class CourseServiceImpl implements CourseService {
         CourseRules.validateScores(course.getCertificate(), course.getCertificatePart(),
                 course.getEntryScore(), course.getTargetScore());
         if (request.getMentorId() != null) {
-            course.setMentor(resolveMentor(request.getMentorId()));
+            // Admin KHÔNG gán mentor cho khóa học — mentor do hệ thống gán tự động
+            // khi học viên mua gói kèm 1-1 (CourseMentorAssignmentService).
+            // Giữ nguyên mentor hiện có, không ghi đè.
+            log.info("Bỏ qua mentorId khi cập nhật khóa học {} — không cho admin gán mentor",
+                    courseId);
         }
         if (request.getStatus() != null && !request.getStatus().isBlank()) {
             CourseStatus nextStatus = parseStatus(request.getStatus());
@@ -338,6 +360,13 @@ public class CourseServiceImpl implements CourseService {
         UUID currentUserId = SecurityUtils.getCurrentUserId().orElse(null);
         boolean isEnrolled = enrollmentChecker.canAccessContent(currentUserId, courseId);
 
+        // Học viên CHƯA mua gói kèm 1-1 → không thấy bài tập của khóa (tab "Bài tập"
+        // bị ẩn hoàn toàn ở UI và API trả rỗng → không lách được bằng cách gọi thẳng).
+        // Admin/Mentor vẫn thấy để quản lý / chấm bài.
+        if (currentUserId != null && !isStaff() && !graderAssignmentService.hasMentor(currentUserId)) {
+            return List.of();
+        }
+
         List<CourseContent> contents =
                 courseContentRepository.findByCourse_CourseIdAndContentTypeOrderByContentOrderAsc(courseId, ContentType.HOMEWORK);
 
@@ -396,6 +425,14 @@ public class CourseServiceImpl implements CourseService {
             }
             contentData = exam != null ? withExamId(contentData, exam.getExamId()) : withoutExamId(contentData);
             skill = resolveHomeworkSkill(course, request.getCertificatePartId());
+        } else if (contentType == ContentType.EXAM) {
+            // Nội dung "Bài thi cuối kỳ" — CHỈ gắn được đề CUỐI KỲ của kho đề thi.
+            exam = resolveFinalExam(request.getExamId(), contentData, courseId);
+            if (exam == null) {
+                throw new AppException(ErrorCode.COURSE_CONTENT_EXAM_REQUIRED,
+                        "Vui lòng chọn một đề thi CUỐI KỲ trong kho đề thi");
+            }
+            contentData = withExamId(contentData, exam.getExamId());
         }
 
         CourseContent content = CourseContent.builder()
@@ -486,6 +523,15 @@ public class CourseServiceImpl implements CourseService {
                 content.setCertificatePart(resolveHomeworkSkill(content.getCourse(), request.getCertificatePartId()));
             }
             content.setContentData(contentData);
+        } else if (content.getContentType() == ContentType.EXAM) {
+            // Đổi đề cuối kỳ → vẫn chỉ cho gắn đề CUỐI KỲ.
+            Exam exam = resolveFinalExam(request.getExamId(), contentData, courseId);
+            if (exam == null) {
+                throw new AppException(ErrorCode.COURSE_CONTENT_EXAM_REQUIRED,
+                        "Vui lòng chọn một đề thi CUỐI KỲ trong kho đề thi");
+            }
+            content.setExam(exam);
+            content.setContentData(withExamId(contentData, exam.getExamId()));
         } else {
             content.setContentData(contentData);
         }
@@ -688,9 +734,66 @@ public class CourseServiceImpl implements CourseService {
         return exam;
     }
 
+    /**
+     * Resolve đề thi CUỐI KỲ cho nội dung 'exam' (Bài thi cuối kỳ) — V29.
+     * <p>
+     * Luật:
+     * <ul>
+     *   <li>Đề phải tồn tại và có {@code exam_type = 'final'} (đề cuối kỳ);</li>
+     *   <li>Đề phải đã CÔNG BÁI, không trả phí;</li>
+     *   <li>Đề thuộc KHÁC khóa học đang chỉnh sửa → không gắn được.</li>
+     * </ul>
+     *
+     * @return đề hợp lệ, hoặc {@code null} nếu không có id được cung cấp.
+     */
+    private Exam resolveFinalExam(UUID requestedExamId, String contentData, UUID courseId) {
+        UUID examId = requestedExamId;
+        if (examId == null) {
+            String raw = JsonUtil.readString(contentData, "examId");
+            if (raw != null && !raw.isBlank()) {
+                try {
+                    examId = UUID.fromString(raw.trim());
+                } catch (IllegalArgumentException ignored) {
+                    examId = null;
+                }
+            }
+        }
+        if (examId == null) {
+            return null;
+        }
+        Exam exam = examRepository.findById(examId)
+                .orElseThrow(() -> new AppException(ErrorCode.EXAM_NOT_FOUND));
+        // CHỈ đề CUỐI Kỳ được gắn vào nội dung 'exam'.
+        if (exam.getExamType() != ExamType.FINAL) {
+            throw new AppException(ErrorCode.COURSE_CONTENT_EXAM_NOT_FINAL,
+                    "Đề thi \"" + exam.getExamTitle() + "\" không phải đề CUỐI KỲ");
+        }
+        // Đề gắn vào KHÓA HỌC KHÁC → học viên khóa này không mở được lượt thi
+        // (`ExamAccessPolicy` yêu cầu enrollment đúng khóa của đề).
+        if (courseId != null && exam.getCourse() != null
+                && !courseId.equals(exam.getCourse().getCourseId())) {
+            throw new AppException(ErrorCode.COURSE_CONTENT_EXAM_NOT_OWNED,
+                    "Đề thi \"" + exam.getExamTitle() + "\" thuộc khóa học khác");
+        }
+        if (exam.getStatus() != ExamStatus.PUBLISHED) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Đề thi \"" + exam.getExamTitle() + "\" chưa xuất bản, hãy xuất bản đề trước khi gắn");
+        }
+        if (Boolean.FALSE.equals(exam.getIsFree())) {
+            throw new AppException(ErrorCode.VALIDATION_ERROR,
+                    "Đề thi \"" + exam.getExamTitle() + "\" là đề trả phí, không thể gắn vào bài thi cuối kỳ");
+        }
+        // Đề phạm vi TRIAL (không gắn khóa học) → học viên không mở được lượt thi
+        // (`ExamAccessPolicy` chỉ cho làm đề có `exam_scope = 'course'`).
+        if (exam.getExamScope() != ExamScope.COURSE) {
+            throw new AppException(ErrorCode.COURSE_CONTENT_EXAM_NOT_OWNED,
+                    "Đề thi \"" + exam.getExamTitle() + "\" không thuộc phạm vi khóa học (thi thử) nên không thể gắn vào bài thi cuối kỳ");
+        }
+        return exam;
+    }
+
     /** Bỏ `examId` khỏi JSONB khi bài tập không phải trắc nghiệm. */
-    private String withoutExamId(String contentData) {
-        JsonNode node = JsonUtil.parse(contentData);
+    private String withoutExamId(String contentData) {        JsonNode node = JsonUtil.parse(contentData);
         if (node == null || !node.isObject()) {
             return contentData;
         }
@@ -822,6 +925,14 @@ public class CourseServiceImpl implements CourseService {
         }
     }
 
+    /** Người dùng là quản trị viên hoặc mentor (không phải học viên). */
+    private boolean isStaff() {
+        return SecurityUtils.getCurrentUserPrincipal()
+                .map(p -> "ADMIN".equalsIgnoreCase(p.getRoleName())
+                        || "MENTOR".equalsIgnoreCase(p.getRoleName()))
+                .orElse(false);
+    }
+
     private void ensureCourseExists(UUID courseId) {
         if (!courseRepository.existsById(courseId)) {
             throw new AppException(ErrorCode.COURSE_NOT_FOUND);
@@ -863,24 +974,35 @@ public class CourseServiceImpl implements CourseService {
                 .orElseThrow(() -> new AppException(ErrorCode.CERTIFICATE_PART_NOT_FOUND));
     }
 
-    private User resolveMentor(UUID mentorId) {
-        if (mentorId == null) {
-            return null;
-        }
-        User mentor = userRepository.findById(mentorId)
-                .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
-        String role = mentor.getRole() != null ? mentor.getRole().getRoleName() : null;
-        if (role == null || !"MENTOR".equalsIgnoreCase(role)) {
-            throw new AppException(ErrorCode.COURSE_MENTOR_INVALID);
-        }
-        return mentor;
-    }
-
     private CourseResponse toCourseResponse(Course course) {
         Certificate certificate = course.getCertificate();
         CertificatePart certificatePart = course.getCertificatePart();
         User mentor = course.getMentor();
         User creator = course.getCreatedByUser();
+
+        // Mentor 1-1 của HỌC VIÊN ĐANG XEM (mỗi học viên có thể mua gói với mentor khác nhau).
+        UUID viewerId = SecurityUtils.getCurrentUserId().orElse(null);
+        UUID viewerMentorId = viewerId != null
+                ? graderAssignmentService.findAssignedMentorId(viewerId).orElse(null)
+                : null;
+        String viewerMentorName = viewerMentorId != null
+                ? graderAssignmentService.findAssignedMentorName(viewerId)
+                : null;
+
+        // Tab "Bài tập" chỉ mở cho học viên ĐÃ MUA GÓI MENTOR 1-1 (bài tập cần mentor chấm tay).
+        // Admin/Mentor vẫn thấy để quản lý.
+        boolean staff = isStaff();
+        boolean homeworkEnabled = staff || viewerMentorId != null;
+
+        // Khóa học được nhiều học viên học chung, mỗi người có thể mua gói 1-1 với
+        // mentor KHÁC NHAU → cột `mentor_id` của khóa KHÔNG được lộ cho học viên
+        // (sẽ hiện tên mentor của học viên khác). Học viên chỉ thấy mentor của MÌNH.
+        UUID shownMentorId = staff
+                ? (mentor != null ? mentor.getUserId() : null)
+                : viewerMentorId;
+        String shownMentorName = staff
+                ? (mentor != null ? mentor.getFullName() : null)
+                : viewerMentorName;
 
         return CourseResponse.builder()
                 .courseId(course.getCourseId())
@@ -897,8 +1019,11 @@ public class CourseServiceImpl implements CourseService {
                 .certificateName(certificate != null ? certificate.getCertificateName() : null)
                 .certificatePartId(certificatePart != null ? certificatePart.getPartId() : null)
                 .certificatePartName(certificatePart != null ? certificatePart.getPartName() : null)
-                .mentorId(mentor != null ? mentor.getUserId() : null)
-                .mentorName(mentor != null ? mentor.getFullName() : null)
+                .mentorId(shownMentorId)
+                .mentorName(shownMentorName)
+                .viewerMentorId(viewerMentorId)
+                .viewerMentorName(viewerMentorName)
+                .homeworkEnabled(homeworkEnabled)
                 .createdByUserId(creator != null ? creator.getUserId() : null)
                 .createdAt(course.getCreatedAt())
                 .lastUpdated(course.getLastUpdated())
@@ -1021,6 +1146,50 @@ public class CourseServiceImpl implements CourseService {
                 ? readVocabularySetIds(content.getContentData()).stream().map(UUID::toString).toList()
                 : null;
 
+        /* ---------- V29: tiến độ xem video của học viên ---------- */
+        Boolean completed = null;
+        Integer watchedSeconds = null;
+        Integer completedLessonCount = null;
+        Integer totalLessonCount = null;
+
+        if (content.getContentType() == ContentType.LESSON && isEnrolled && currentUserId != null) {
+            for (LessonProgress progress : lessonProgressService.listProgress(currentUserId,
+                    content.getCourse().getCourseId())) {
+                if (content.getContentId().equals(progress.getContentId())) {
+                    completed = Boolean.TRUE.equals(progress.getCompleted());
+                    watchedSeconds = progress.getWatchedSeconds();
+                    break;
+                }
+            }
+        }
+
+        /* ---------- V29: luật mở khoá bài thi cuối kỳ ---------- */
+        Boolean requiresMentor = null;
+        String examLockReason = null;
+
+        if (content.getContentType() == ContentType.EXAM) {
+            requiresMentor = courseExamContentService.requiresMentorGrading(examId);
+            if (isEnrolled && currentUserId != null) {
+                long total = courseExamContentService.countLessons(content.getCourse().getCourseId());
+                long done = lessonProgressService.countCompletedLessons(currentUserId,
+                        content.getCourse().getCourseId());
+                completedLessonCount = (int) done;
+                totalLessonCount = (int) total;
+
+                if (!courseExamContentService.allLessonsCompleted(currentUserId,
+                        content.getCourse().getCourseId())) {
+                    // Chưa xem xong hết video → khoá.
+                    examLockReason = "lessons";
+                    locked = true;
+                } else if (Boolean.TRUE.equals(requiresMentor)
+                        && !courseExamContentService.hasMentorPlan(currentUserId)) {
+                    // Đề có phần tự luận → cần mua gói kèm 1-1 để mentor chấm.
+                    examLockReason = "mentor";
+                    locked = true;
+                }
+            }
+        }
+
         return CourseContentResponse.builder()
                 .contentId(content.getContentId())
                 .courseId(content.getCourse() != null ? content.getCourse().getCourseId() : null)
@@ -1038,6 +1207,12 @@ public class CourseServiceImpl implements CourseService {
                 .certificatePartId(content.getCertificatePart() != null
                         ? content.getCertificatePart().getPartId() : null)
                 .vocabularySetIds(vocabularySetIds)
+                .completed(completed)
+                .watchedSeconds(watchedSeconds)
+                .requiresMentor(requiresMentor)
+                .examLockReason(examLockReason)
+                .completedLessonCount(completedLessonCount)
+                .totalLessonCount(totalLessonCount)
                 .build();
     }
 }

@@ -467,7 +467,8 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
     }
 
     /**
-     * Quyền làm bài: bài của khóa học → phải ghi danh khóa học;
+     * Quyền làm bài: bài của khóa học → phải ghi danh khóa học <b>AND</b> đã mua
+     * gói kèm 1-1 (bài tập khóa học cần mentor 1-1 chấm tay);
      * bài riêng của mentor (V27, course = null) → phải ghi danh lộ trình chứa bài.
      */
     private void assertCanAccess(CourseContent homework, UUID studentId) {
@@ -477,6 +478,12 @@ public class HomeworkSubmissionServiceImpl implements HomeworkSubmissionService 
         }
         if (!enrollments.isEnrolled(studentId, homework.getCourse().getCourseId())) {
             throw new AppException(ErrorCode.ENROLLMENT_REQUIRED);
+        }
+        // Bài tập thuộc KHÓA HỌC chỉ mở khi học viên đã mua gói kèm 1-1 →
+        // đây chính là điều kiện MỞ TAB "Bài tập" ở màn khóa học. Chưa mua → chặn
+        // luôn (kể cả khi gọi API trực tiếp), tránh lách qua client.
+        if (!assignmentService.hasMentor(studentId)) {
+            throw new AppException(ErrorCode.HOMEWORK_MENTOR_PLAN_REQUIRED);
         }
     }
 

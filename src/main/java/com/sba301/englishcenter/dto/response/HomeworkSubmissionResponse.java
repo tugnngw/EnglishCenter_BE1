@@ -110,4 +110,19 @@ public class HomeworkSubmissionResponse {
 
     /** true = bài này là trắc nghiệm (hệ thống tự chấm, mentor chỉ xem thống kê). */
     Boolean autoGraded;
+
+    /**
+     * Nguồn của bài tập — dùng để CHIA MÀN hàng đợi chấm của mentor:
+     * <ul>
+     *   <li>{@code course} — bài tập MẶC ĐỊNH của khóa học (admin tạo);</li>
+     *   <li>{@code mentor} — bài tập mentor tự tạo và gửi cho học viên.</li>
+     * </ul>
+     */
+    String homeworkSource;
+
+    /** Id khóa học chứa bài tập (null = bài tập riêng của mentor). */
+    UUID courseId;
+
+    /** Tên khóa học chứa bài tập (null = bài tập riêng của mentor). */
+    String courseTitle;
 }
