@@ -551,9 +551,6 @@ public class ExamServiceImpl implements ExamService {
         }
     }
 
-    /** Mô tả tối thiểu của đề thi thử / đề khóa học: phải nói rõ đề gồm gì, không ghi vài ba chữ. */
-    static final int MIN_DESCRIPTION_LENGTH = 30;
-
     private void validateTypeAndDescription(Exam exam) {
         validateType(exam);
         validateDescription(exam);
@@ -623,7 +620,6 @@ public class ExamServiceImpl implements ExamService {
                 .minDurationMinutes(MIN_DURATION_MINUTES)
                 .maxDurationMinutes(maxDurationMinutes(examType, preset))
                 .fullTestMinutes(fullTestMinutes(preset))
-                .minDescriptionLength(MIN_DESCRIPTION_LENGTH)
                 .build();
     }
 
@@ -684,9 +680,9 @@ public class ExamServiceImpl implements ExamService {
         if (exam.getExamScope() == ExamScope.PRACTICE) {
             return;
         }
-        String description = exam.getDescription() == null ? "" : exam.getDescription().trim();
-        if (description.length() < MIN_DESCRIPTION_LENGTH) {
-            throw new AppException(ErrorCode.EXAM_DESCRIPTION_TOO_SHORT);
+        // Mô tả bắt buộc nhưng không giới hạn độ dài
+        if (exam.getDescription() == null || exam.getDescription().isBlank()) {
+            throw new AppException(ErrorCode.EXAM_DESCRIPTION_REQUIRED);
         }
     }
 

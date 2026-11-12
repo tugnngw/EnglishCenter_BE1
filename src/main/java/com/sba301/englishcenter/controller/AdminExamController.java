@@ -79,7 +79,7 @@ public class AdminExamController {
     }
 
     @GetMapping("/exams/rules")
-    @Operation(summary = "Exam rules", description = "Duration range and minimum description length for a "
+    @Operation(summary = "Exam rules", description = "Duration range (min / max minutes) for a "
             + "certificate + exam type (create / edit exam form)")
     public ApiResponse<ExamRulesResponse> getExamRules(@RequestParam(required = false) UUID certificateId,
                                                        @RequestParam(required = false) String examType) {

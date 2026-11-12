@@ -9,7 +9,7 @@ import lombok.Setter;
 import lombok.experimental.FieldDefaults;
 
 /**
- * Giới hạn khi tạo / sửa đề theo chứng chỉ + loại đề - FE form tạo đề đọc từ đây thay vì chép lại con số
+ * Giới hạn thời lượng khi tạo / sửa đề theo chứng chỉ + loại đề - FE form tạo đề đọc từ đây thay vì chép lại con số
  * (BE là nơi duy nhất giữ các ngưỡng, xem ExamServiceImpl).
  */
 @Getter
@@ -28,7 +28,4 @@ public class ExamRulesResponse {
 
     /** Thời gian thi thật của chứng chỉ (phút) - để FE giải thích mức tối đa. */
     Integer fullTestMinutes;
-
-    /** Mô tả đề tối thiểu bao nhiêu ký tự. */
-    Integer minDescriptionLength;
 }

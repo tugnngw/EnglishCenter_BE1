@@ -127,8 +127,7 @@ public enum ErrorCode {
     AI_IMPORT_FAILED(5026, "AI không đọc được file, vui lòng thử lại", HttpStatus.BAD_GATEWAY),
     ATTEMPT_GRADING_CLAIMED(5027, "Bài này đang được mentor khác chấm", HttpStatus.CONFLICT),
     EXAM_TYPE_SCOPE_MISMATCH(5028, "Loại đề không hợp với phạm vi đề thi", HttpStatus.BAD_REQUEST),
-    EXAM_DESCRIPTION_TOO_SHORT(5029, "Mô tả đề thi phải từ 30 ký tự: ghi rõ đề gồm những phần nào, dành cho ai, "
-            + "làm trong bao lâu", HttpStatus.BAD_REQUEST),
+    EXAM_DESCRIPTION_REQUIRED(5029, "Nhập mô tả đề thi", HttpStatus.BAD_REQUEST),
     EXAM_COURSE_NOT_COMPLETED(5030, "Cần đạt đủ bài tập của khóa học trước khi thi cuối kỳ", HttpStatus.FORBIDDEN),
     EXAM_QUIZZES_NOT_PASSED(5031, "Cần đạt hết các bài Quiz của khóa học trước khi thi giữa kỳ", HttpStatus.FORBIDDEN),
     EXAM_MIDTERM_NOT_PASSED(5032, "Cần đạt bài thi giữa kỳ trước khi thi cuối kỳ", HttpStatus.FORBIDDEN),

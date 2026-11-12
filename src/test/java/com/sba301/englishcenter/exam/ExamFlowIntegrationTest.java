@@ -132,7 +132,7 @@ class ExamFlowIntegrationTest {
         jdbc.update("INSERT INTO enrollments (student_id, course_id, status) VALUES (?, ?, 'active')",
                 ((UserPrincipal) student.getPrincipal()).getUserId(), courseId);
 
-        // ---------- Admin tạo đề. Thi thử / kiểm tra đầu vào đã bỏ -> 5028; mô tả quá ngắn -> 5029
+        // ---------- Admin tạo đề. Thi thử / kiểm tra đầu vào đã bỏ -> 5028; mô tả để trống -> 5029
         assertThat((Integer) call(post("/api/v1/admin/exams"), admin, """
                 {"examScope":"trial","certificateId":"%s","examType":"placement_test","examTitle":"Integration exam",
                  "description":"%s","durationMinutes":30}""".formatted(certificateId, DESCRIPTION))
@@ -144,7 +144,7 @@ class ExamFlowIntegrationTest {
                 .read("$.code")).isEqualTo(5028);
         assertThat((Integer) call(post("/api/v1/admin/exams"), admin, """
                 {"examScope":"course","courseId":"%s","examType":"quiz","examTitle":"Integration exam",
-                 "description":"Đề test","durationMinutes":30}""".formatted(courseId))
+                 "description":"   ","durationMinutes":30}""".formatted(courseId))
                 .read("$.code")).isEqualTo(5029);
         // Thời lượng: tối thiểu 15 phút, Quiz tối đa 60 phút, không quá thời gian thi thật -> 5034
         assertThat((Integer) call(post("/api/v1/admin/exams"), admin, """
@@ -378,7 +378,6 @@ class ExamFlowIntegrationTest {
         assertThat(finalRules.status()).as(finalRules.body()).isEqualTo(200);
         assertThat((Integer) finalRules.read("$.result.minDurationMinutes")).isEqualTo(15);
         assertThat((Integer) finalRules.read("$.result.maxDurationMinutes")).isEqualTo(165);
-        assertThat((Integer) finalRules.read("$.result.minDescriptionLength")).isEqualTo(30);
         assertThat((Integer) call(get(rules + "quiz"), admin, null).read("$.result.maxDurationMinutes")).isEqualTo(60);
         assertThat((Integer) call(get("/api/v1/admin/exams/rules?examType=final"), admin, null)
                 .read("$.result.maxDurationMinutes")).isEqualTo(180);

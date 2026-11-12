@@ -41,7 +41,7 @@ public interface ExamService {
 
     ExamDetailResponse publishExam(UUID examId);
 
-    /** Giới hạn khi tạo / sửa đề theo chứng chỉ + loại đề (thời lượng, độ dài mô tả) - cho form của FE. */
+    /** Giới hạn khi tạo / sửa đề theo chứng chỉ + loại đề (khoảng thời lượng) - cho form của FE. */
     ExamRulesResponse getExamRules(UUID certificateId, ExamType examType);
 
     ExamDetailResponse unpublishExam(UUID examId);
