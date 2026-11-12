@@ -30,6 +30,7 @@ public class CertificateResponse {
     String scoreUnit;
     String scaleType;
     String roundingRule;
+    String standardScale;
     Integer partCount;
     List<CertificatePartResponse> parts;
     LocalDateTime createdAt;

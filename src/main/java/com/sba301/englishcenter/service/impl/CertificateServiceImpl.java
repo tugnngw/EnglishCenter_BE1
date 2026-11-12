@@ -1,5 +1,6 @@
 package com.sba301.englishcenter.service.impl;
 
+import com.sba301.englishcenter.common.enums.StandardCertificateScale;
 import com.sba301.englishcenter.dto.request.CreateCertificateRequest;
 import com.sba301.englishcenter.dto.request.UpdateCertificateRequest;
 import com.sba301.englishcenter.dto.response.CertificatePartResponse;
@@ -22,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -68,17 +70,40 @@ public class CertificateServiceImpl implements CertificateService {
         User creator = userRepository.findById(currentUserId)
                 .orElseThrow(() -> new AppException(ErrorCode.USER_NOT_FOUND));
 
+        StandardCertificateScale standardScale =
+                StandardCertificateScale.detect(request.getCertificateName()).orElse(null);
+
         Certificate.CertificateBuilder certBuilder = Certificate.builder()
                 .certificateName(request.getCertificateName())
                 .description(request.getDescription())
-                .createdByUser(creator);
+                .createdByUser(creator)
+                .standardScale(standardScale);
 
-        if (request.getMinScore() != null) certBuilder.minScore(request.getMinScore());
-        if (request.getMaxScore() != null) certBuilder.maxScore(request.getMaxScore());
-        if (request.getScoreStep() != null) certBuilder.scoreStep(request.getScoreStep());
-        if (request.getScoreUnit() != null) certBuilder.scoreUnit(request.getScoreUnit());
-        if (request.getScaleType() != null) certBuilder.scaleType(request.getScaleType());
-        if (request.getRoundingRule() != null) certBuilder.roundingRule(request.getRoundingRule());
+        BigDecimal minScore = request.getMinScore() != null
+                ? request.getMinScore()
+                : standardScale != null ? standardScale.getMinScore() : null;
+        BigDecimal maxScore = request.getMaxScore() != null
+                ? request.getMaxScore()
+                : standardScale != null ? standardScale.getMaxScore() : null;
+        BigDecimal scoreStep = request.getScoreStep() != null
+                ? request.getScoreStep()
+                : standardScale != null ? standardScale.getScoreStep() : null;
+        String scoreUnit = request.getScoreUnit() != null
+                ? request.getScoreUnit()
+                : standardScale != null ? standardScale.getScoreUnit() : null;
+        String scaleType = request.getScaleType() != null
+                ? request.getScaleType()
+                : standardScale != null ? standardScale.getScaleType() : null;
+        String roundingRule = request.getRoundingRule() != null
+                ? request.getRoundingRule()
+                : standardScale != null ? standardScale.getRoundingRule() : null;
+
+        if (minScore != null) certBuilder.minScore(minScore);
+        if (maxScore != null) certBuilder.maxScore(maxScore);
+        if (scoreStep != null) certBuilder.scoreStep(scoreStep);
+        if (scoreUnit != null) certBuilder.scoreUnit(scoreUnit);
+        if (scaleType != null) certBuilder.scaleType(scaleType);
+        if (roundingRule != null) certBuilder.roundingRule(roundingRule);
 
         Certificate certificate = certBuilder.build();
 
@@ -122,6 +147,8 @@ public class CertificateServiceImpl implements CertificateService {
         if (request.getCertificateName() != null && !request.getCertificateName().isBlank()) {
             certificate.setCertificateName(request.getCertificateName());
         }
+        certificate.setStandardScale(
+                StandardCertificateScale.detect(certificate.getCertificateName()).orElse(null));
         if (request.getDescription() != null) {
             certificate.setDescription(request.getDescription());
         }
@@ -249,6 +276,8 @@ public class CertificateServiceImpl implements CertificateService {
                 .scoreUnit(certificate.getScoreUnit())
                 .scaleType(certificate.getScaleType())
                 .roundingRule(certificate.getRoundingRule())
+                .standardScale(certificate.getStandardScale() != null
+                        ? certificate.getStandardScale().getCode() : null)
                 .partCount(count)
                 .createdAt(certificate.getCreatedAt())
                 .lastUpdated(certificate.getLastUpdated())
@@ -270,6 +299,8 @@ public class CertificateServiceImpl implements CertificateService {
                 .scoreUnit(certificate.getScoreUnit())
                 .scaleType(certificate.getScaleType())
                 .roundingRule(certificate.getRoundingRule())
+                .standardScale(certificate.getStandardScale() != null
+                        ? certificate.getStandardScale().getCode() : null)
                 .partCount(partResponses.size())
                 .parts(partResponses)
                 .createdAt(certificate.getCreatedAt())

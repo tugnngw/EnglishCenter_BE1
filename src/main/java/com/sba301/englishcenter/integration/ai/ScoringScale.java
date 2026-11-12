@@ -1,11 +1,13 @@
 package com.sba301.englishcenter.integration.ai;
 
+import com.sba301.englishcenter.common.enums.StandardCertificateScale;
+
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 /**
  * Thang điểm AI dùng để chấm: lấy theo chứng chỉ mục tiêu của người học.
- * VD IELTS 0 – 9 (bước 0.5), TOEIC Speaking/Writing 0 – 200 (bước 10), VSTEP 0 – 10 (bước 0.5).
+ * VD IELTS 1.0 – 9.0 (bước 0.5), TOEIC Speaking/Writing 0 – 200 (bước 10), VSTEP 0 – 10 (bước 0.5).
  *
  * @param certificateName tên chứng chỉ hiển thị trong prompt (VD "IELTS Academic")
  * @param minScore        điểm thấp nhất của kỹ năng
@@ -15,8 +17,12 @@ import java.math.RoundingMode;
 public record ScoringScale(String certificateName, BigDecimal minScore, BigDecimal maxScore, BigDecimal step) {
 
     /** Mặc định khi người học chưa chọn chứng chỉ mục tiêu / chứng chỉ chưa cấu hình thang. */
-    public static final ScoringScale IELTS = new ScoringScale("IELTS",
-            BigDecimal.ZERO, new BigDecimal("9.0"), new BigDecimal("0.5"));
+    public static final ScoringScale IELTS = of(StandardCertificateScale.IELTS);
+
+    public static ScoringScale of(StandardCertificateScale standard) {
+        return new ScoringScale(standard.getCode(), standard.getMinScore(),
+                standard.getMaxScore(), standard.getScoreStep());
+    }
 
     /** Kẹp trong [min, max] rồi làm tròn tới bước gần nhất. */
     public BigDecimal normalize(BigDecimal score) {
