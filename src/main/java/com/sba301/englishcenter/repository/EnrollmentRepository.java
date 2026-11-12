@@ -6,8 +6,9 @@ import org.springframework.data.jpa.repository.*;
 import java.util.List;
 import java.util.UUID;
 
-public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID> {
+public interface EnrollmentRepository extends JpaRepository<Enrollment, UUID>, JpaSpecificationExecutor<Enrollment> {
     boolean existsByStudentIdAndCourse_CourseIdAndStatus(UUID studentId, UUID courseId, Enrollment.Status status);
+
     @EntityGraph(attributePaths = "course")
     Page<Enrollment> findByStudentIdAndStatus(UUID studentId, Enrollment.Status status, Pageable pageable);
 

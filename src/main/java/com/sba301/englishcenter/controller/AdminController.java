@@ -17,6 +17,7 @@ import com.sba301.englishcenter.dto.response.CertificateResponse;
 import com.sba301.englishcenter.dto.response.CourseContentResponse;
 import com.sba301.englishcenter.dto.response.CourseResponse;
 import com.sba301.englishcenter.dto.response.CreateMentorResponse;
+import com.sba301.englishcenter.dto.response.EnrollmentResponse;
 import com.sba301.englishcenter.dto.response.HomeworkSubmissionResponse;
 import com.sba301.englishcenter.dto.response.MentorResponse;
 import com.sba301.englishcenter.dto.response.MentorStatsResponse;
@@ -25,6 +26,7 @@ import com.sba301.englishcenter.dto.response.UserResponse;
 import com.sba301.englishcenter.dto.response.VocabularyLibraryItemResponse;
 import com.sba301.englishcenter.service.CertificateService;
 import com.sba301.englishcenter.service.CourseService;
+import com.sba301.englishcenter.service.EnrollmentService;
 import com.sba301.englishcenter.service.HomeworkSubmissionService;
 import com.sba301.englishcenter.service.MentorService;
 import com.sba301.englishcenter.service.RoleService;
@@ -61,6 +63,7 @@ public class AdminController {
     private final UserService userService;
     private final RoleService roleService;
     private final MentorService mentorService;
+    private final EnrollmentService enrollmentService;
     // Dev 2 — added for Certificate/Course/CourseContent/HomeworkSubmission admin operations
     private final CertificateService certificateService;
     private final CourseService courseService;
@@ -274,5 +277,27 @@ public class AdminController {
             description = "Retrieve a single submission for lookup. Grading is done by mentors only.")
     public ApiResponse<HomeworkSubmissionResponse> getSubmission(@PathVariable UUID submissionId) {
         return ApiResponse.success(submissionService.getSubmissionById(submissionId));
+    }
+
+    // ============================================
+    // ENROLLMENTS
+    // ============================================
+
+    @GetMapping("/enrollments")
+    @Operation(summary = "Admin: Get all enrollments",
+            description = "Retrieve paginated list of enrollments with optional filters (studentId, courseId, status)")
+    public PageResponse<EnrollmentResponse> getEnrollments(
+            @RequestParam(required = false) UUID studentId,
+            @RequestParam(required = false) UUID courseId,
+            @RequestParam(required = false) String status,
+            @PageableDefault(size = 20, sort = "enrolledDate", direction = Sort.Direction.DESC) Pageable pageable) {
+        return enrollmentService.getAllEnrollments(studentId, courseId, status, pageable);
+    }
+
+    @GetMapping("/students/{studentId}/enrollments")
+    @Operation(summary = "Admin: Get student enrollments",
+            description = "Retrieve active enrollments for a specific student")
+    public ApiResponse<List<EnrollmentResponse>> getStudentEnrollments(@PathVariable UUID studentId) {
+        return ApiResponse.success(enrollmentService.getStudentEnrollments(studentId));
     }
 }
